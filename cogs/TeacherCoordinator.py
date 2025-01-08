@@ -53,7 +53,7 @@ class TeacherCoordinator(commands.Cog):
 
         # Check if teacher is already registered
         if teacher_role in teacher.roles:
-            return error_msg(f"{teacher.mention} ist bereits registriert")
+            return error_msg(f"{teacher.mention} ist bereits registriert", code_issue=False)
 
         # ---
         await teacher.add_roles(teacher_role)
@@ -89,7 +89,7 @@ class TeacherCoordinator(commands.Cog):
 
         # Ensure teacher is assigned
         if teacher_role not in teacher.roles:
-            return error_msg(f"{teacher.mention} ist kein registrierter Lehrer")
+            return error_msg(f"{teacher.mention} ist kein registrierter Lehrer", code_issue=False)
 
         irregular_circurstances_msgs = []
 
