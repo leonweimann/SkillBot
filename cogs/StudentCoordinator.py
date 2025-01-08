@@ -80,8 +80,6 @@ class StudentCoordinator(commands.Cog):
         return success_msg(f"Schüler {student.mention} registriert")
 
     async def __unasign_student(self, interaction: discord.Interaction, member: discord.User) -> str:
-        raise NotImplementedError("Not implemented")
-
         if interaction.guild is None:
             return error_msg("Guild is None")
 
