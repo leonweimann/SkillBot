@@ -2,10 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils import error_msg, success_msg
+from Utils.msg import error_msg, success_msg
+from Utils.roles import get_teacher_role
 
 
-class TeacherCoordinator(commands.Cog):
+class TeacherCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -37,7 +38,7 @@ class TeacherCoordinator(commands.Cog):
             case app_commands.MissingRole():
                 await interaction.response.send_message(error_msg("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen.", code_issue=False), ephemeral=True)
             case _:
-                await interaction.response.send_message(error_msg("Ein interner Fehler ist aufgetreten."), ephemeral=True)
+                await interaction.response.send_message(error_msg("Ein interner Fehler ist aufgetreten", error=error), ephemeral=True)
 
     async def __assign_teacher(self, interaction: discord.Interaction, member: discord.User, teacher_name: str) -> str:
         if interaction.guild is None:
@@ -47,9 +48,11 @@ class TeacherCoordinator(commands.Cog):
         if teacher is None:
             return error_msg("Teacher is not a member")
 
-        teacher_role = discord.utils.get(interaction.guild.roles, name='Lehrer')
-        if teacher_role is None:
-            return error_msg("Teacher role not found")
+        # teacher_role = discord.utils.get(interaction.guild.roles, name='Lehrer')
+        # if teacher_role is None:
+        #     return error_msg("Teacher role not found")
+
+        teacher_role = get_teacher_role(interaction.guild)
 
         # Check if teacher is already registered
         if teacher_role in teacher.roles:
@@ -112,4 +115,4 @@ class TeacherCoordinator(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(TeacherCoordinator(bot))
+    await bot.add_cog(TeacherCog(bot))

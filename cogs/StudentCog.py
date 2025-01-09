@@ -2,10 +2,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils import error_msg, success_msg
+import Coordination.student
+
+from Utils.errors import CodeError, UsageError
+from Utils.msg import error_msg, success_msg
 
 
-class StudentCoordinator(commands.Cog):
+class StudentCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -13,107 +16,43 @@ class StudentCoordinator(commands.Cog):
     async def on_ready(self):
         print(f'[COG] {self.__cog_name__} is ready')
 
-    @app_commands.command(name='assign_student', description="Registriert einen neuen Schüler.")
+    @app_commands.command(
+        name='assign_student',
+        description="Registriert einen neuen Schüler."
+    )
     @app_commands.checks.has_role('Lehrer')
-    async def assign_student(self, interaction: discord.Interaction, member: discord.User, student_name: str):
-        await interaction.response.send_message(await self.__assign_student(interaction, member, student_name))
+    async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str):
+        await Coordination.student.assign_student(interaction, member, student_name)
+        await interaction.response.send_message(success_msg(f"Schüler {member.mention} registriert"))
 
     @assign_student.error
     async def assign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        match error:
-            case app_commands.MissingRole():
-                await interaction.response.send_message(error_msg("Du musst die Rolle 'Lehrer' haben, um diesen Befehl zu benutzen.", code_issue=False), ephemeral=True)
-            case _:
-                await interaction.response.send_message(error_msg("Ein interner Fehler ist aufgetreten."), ephemeral=True)
+        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
 
-    @app_commands.command(name='unassign_student', description="Entfernt einen registrierten Schüler.")
+    @app_commands.command(
+        name='unassign_student',
+        description="Entfernt einen registrierten Schüler."
+    )
     @app_commands.checks.has_role('Lehrer')
-    async def unassign_student(self, interaction: discord.Interaction, member: discord.User):
-        await interaction.response.send_message(await self.__unasign_student(interaction, member))
+    async def unassign_student(self, interaction: discord.Interaction, member: discord.Member):
+        await Coordination.student.unassign_student(interaction, member)
+        await interaction.response.send_message(success_msg(f"Schüler {member.mention} abgemeldet"))
 
     @unassign_student.error
     async def unassign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
+
+    def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
             case app_commands.MissingRole():
-                await interaction.response.send_message(error_msg("Du musst die Rolle 'Lehrer' haben, um diesen Befehl zu benutzen.", code_issue=False), ephemeral=True)
+                return error_msg("Du musst die Rolle 'Lehrer' haben, um diesen Befehl zu benutzen.", code_issue=False)
+            case CodeError():
+                return error_msg("Ein interner Fehler ist aufgetreten.", error=error)
+            case UsageError():
+                return error_msg(str(error), code_issue=False)
             case _:
-                await interaction.response.send_message(error_msg("Ein interner Fehler ist aufgetreten."), ephemeral=True)
-
-    async def __assign_student(self, interaction: discord.Interaction, member: discord.User, student_name: str) -> str:
-        if interaction.guild is None:
-            return error_msg("Guild is None")
-
-        teacher = interaction.guild.get_member(interaction.user.id)
-        if teacher is None:
-            return error_msg("Interaction user is not a member")
-
-        student = interaction.guild.get_member(member.id)
-        if student is None:
-            return error_msg("Student is not a member")
-
-        student_role = discord.utils.get(interaction.guild.roles, name='Schüler')
-        if student_role is None:
-            return error_msg("Student role not found")
-
-        # Check if student is already registered
-        if student_role in student.roles:
-            return error_msg(f"{student.mention} ist bereits registrierter Schüler", code_issue=False)
-
-        # ---
-
-        await student.add_roles(student_role)
-        await student.edit(nick=f'🎒 {student_name}')  # Make icons personalisable
-
-        teachers_category = discord.utils.get(interaction.guild.categories, name=teacher.display_name)
-        if teachers_category is None:
-            return error_msg("Teachers category not found")
-
-        overwrites = {
-            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            student: discord.PermissionOverwrite(read_messages=True),
-            teacher: discord.PermissionOverwrite(read_messages=True)
-        }
-
-        channel = await interaction.guild.create_text_channel(student_name, category=teachers_category, overwrites=overwrites)
-        await channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
-
-        return success_msg(f"Schüler {student.mention} registriert")
-
-    async def __unasign_student(self, interaction: discord.Interaction, member: discord.User) -> str:
-        if interaction.guild is None:
-            return error_msg("Guild is None")
-
-        teacher = interaction.guild.get_member(interaction.user.id)
-        if teacher is None:
-            return error_msg("Interaction user is not a member")
-
-        student = interaction.guild.get_member(member.id)
-        if student is None:
-            return error_msg("Student is not a member")
-
-        student_role = discord.utils.get(interaction.guild.roles, name='Schüler')
-        if student_role is None:
-            return error_msg("Student role not found")
-
-        # Ensure student is assigned
-        if student_role not in student.roles:
-            return error_msg(f"{student.mention} ist kein registrierter Schüler", code_issue=False)
-
-        # ---
-        teachers_category = discord.utils.get(interaction.guild.categories, name=teacher.display_name)
-        if teachers_category is None:
-            return error_msg("Teachers category not found")
-
-        for channel in teachers_category.channels:
-            if channel.name == student.display_name:
-                await channel.delete()
-                break
-
-        await student.edit(nick=None)
-        await student.remove_roles(student_role)
-
-        return success_msg(f"Schüler {student.mention} abgemeldet")
+                return error_msg("Ein unbekannter Fehler ist aufgetreten.", error=error)
 
 
 async def setup(bot):
-    await bot.add_cog(StudentCoordinator(bot))
+    await bot.add_cog(StudentCog(bot))
