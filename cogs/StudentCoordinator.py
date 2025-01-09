@@ -116,4 +116,4 @@ class StudentCoordinator(commands.Cog):
 
 
 async def setup(bot):
-    bot.add_cog(StudentCoordinator(bot))
+    await bot.add_cog(StudentCoordinator(bot))
