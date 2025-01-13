@@ -31,7 +31,7 @@ def get_discord_token() -> str:
 
 
 async def load_cogs():
-    for filename in os.listdir('./cogs'):
+    for filename in os.listdir('./src/cogs'):
         if filename.endswith('.py'):
             await bot.load_extension(f'cogs.{filename[:-3]}')
 
