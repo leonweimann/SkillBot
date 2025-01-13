@@ -51,11 +51,19 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
     if student_role not in student.roles:
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
+    # TODO: Student channel deletion doesn't work, because the channel is not found.
+    #       Plan: Make a database for the Bot and store there all data in a structured way.
+    #       Then delete channel by id from database.
+
+    # Hold the student channel name, because it will be deleted before channel will be
+    student_channel_name = get_name_by_nick(student.display_name)
+
     # First remove roles and nick, because channel might never existed?
     # Regardless of that, in any case from here on the nick and role should be removed.
-    await student.remove_roles(student_role)
-    await student.edit(nick=None)
 
     # Delete students channel
-    student_channel = get_channel_by_name(interaction.guild, get_name_by_nick(student.display_name))
+    student_channel = get_channel_by_name(interaction.guild, student_channel_name)
     await student_channel.delete()
+
+    await student.remove_roles(student_role)
+    await student.edit(nick=None)

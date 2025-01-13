@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import Coordination.student
+from Coordination.student import assign_student as _assign_student, unassign_student as _unassign_student
 
 from Utils.errors import CodeError, UsageError
 from Utils.msg import error_msg, success_msg
@@ -22,7 +22,7 @@ class StudentCog(commands.Cog):
     )
     @app_commands.checks.has_role('Lehrer')
     async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str):
-        await Coordination.student.assign_student(interaction, member, student_name)
+        await _assign_student(interaction, member, student_name)
         await interaction.response.send_message(success_msg(f"Schüler {member.mention} registriert"))
 
     @assign_student.error
@@ -35,7 +35,7 @@ class StudentCog(commands.Cog):
     )
     @app_commands.checks.has_role('Lehrer')
     async def unassign_student(self, interaction: discord.Interaction, member: discord.Member):
-        await Coordination.student.unassign_student(interaction, member)
+        await _unassign_student(interaction, member)
         await interaction.response.send_message(success_msg(f"Schüler {member.mention} abgemeldet"))
 
     @unassign_student.error
