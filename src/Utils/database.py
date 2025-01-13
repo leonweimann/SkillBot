@@ -4,42 +4,50 @@ import os
 
 def create_connection():
     db_path = os.path.join(os.path.dirname(__file__), '../../data/skillbot.db')
-    return sqlite3.connect(db_path)
+    try:
+        return sqlite3.connect(db_path)
+    except sqlite3.Error as e:
+        print("Error connecting to database: ", e)
+        raise
 
 
 def create_tables():
     with create_connection() as connection:
-        cursor = connection.cursor()
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            discord_id TEXT NOT NULL UNIQUE,
-            username TEXT NOT NULL,
-            discriminator TEXT NOT NULL,
-            real_name TEXT,
-            hours_in_class INTEGER DEFAULT 0,
-            icon TEXT,
-            user_type TEXT CHECK(user_type IN ('teacher', 'student')) NOT NULL
-        )
-        ''')
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS channels (
-            id INTEGER PRIMARY KEY,
-            discord_id TEXT NOT NULL UNIQUE,
-            user_id INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-        ''')
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS teacher_student (
-            teacher_id INTEGER,
-            student_id INTEGER,
-            PRIMARY KEY (teacher_id, student_id),
-            FOREIGN KEY (teacher_id) REFERENCES users (id),
-            FOREIGN KEY (student_id) REFERENCES users (id)
-        )
-        ''')
-        connection.commit()
+        try:
+            cursor = connection.cursor()
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                discord_id TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL,
+                discriminator TEXT NOT NULL,
+                real_name TEXT,
+                hours_in_class INTEGER DEFAULT 0,
+                icon TEXT,
+                user_type TEXT CHECK(user_type IN ('teacher', 'student')) NOT NULL
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS channels (
+                id INTEGER PRIMARY KEY,
+                discord_id TEXT NOT NULL UNIQUE,
+                user_id INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS teacher_student (
+                teacher_id INTEGER,
+                student_id INTEGER,
+                PRIMARY KEY (teacher_id, student_id),
+                FOREIGN KEY (teacher_id) REFERENCES users (id),
+                FOREIGN KEY (student_id) REFERENCES users (id)
+            )
+            ''')
+            connection.commit()
+        except sqlite3.Error as e:
+            print("Error creating tables: ", e)
+            raise
 
 
 def execute_query(query, params=(), connection=None, fetchone=False, fetchall=False):
@@ -47,17 +55,22 @@ def execute_query(query, params=(), connection=None, fetchone=False, fetchall=Fa
     if connection is None:
         connection = create_connection()
         close_conn = True
-    cursor = connection.cursor()
-    cursor.execute(query, params)
-    result = None
-    if fetchone:
-        result = cursor.fetchone()
-    elif fetchall:
-        result = cursor.fetchall()
-    else:
-        connection.commit()
-    if close_conn:
-        connection.close()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(query, params)
+        result = None
+        if fetchone:
+            result = cursor.fetchone()
+        elif fetchall:
+            result = cursor.fetchall()
+        else:
+            connection.commit()
+    except sqlite3.Error as e:
+        print("Error executing query: ", e)
+        raise
+    finally:
+        if close_conn:
+            connection.close()
     return result
 
 
