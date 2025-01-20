@@ -45,11 +45,11 @@ class StudentCog(commands.Cog):
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
             case app_commands.MissingRole():
-                return error_msg("Du musst die Rolle 'Lehrer' haben, um diesen Befehl zu benutzen.", code_issue=False)
+                return error_msg("Du musst die Rolle 'Lehrer' haben, um diesen Befehl zu benutzen.")
             case CodeError():
                 return error_msg("Ein interner Fehler ist aufgetreten.", error=error)
             case UsageError():
-                return error_msg(str(error), code_issue=False)
+                return error_msg(str(error))
             case _:
                 return error_msg("Ein unbekannter Fehler ist aufgetreten.", error=error)
 
