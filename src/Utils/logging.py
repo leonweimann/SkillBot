@@ -1,7 +1,7 @@
 from discord import Guild
 
-from channels import get_channel_by_name
-from errors import CodeError
+from .channels import get_channel_by_name
+from .errors import CodeError
 
 
 async def log(guild: Guild, message: str):

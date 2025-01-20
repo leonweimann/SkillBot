@@ -1,4 +1,4 @@
-from errors import CodeError
+from .errors import CodeError
 
 
 def error_msg(msg: str, error=None) -> str:

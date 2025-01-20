@@ -1,6 +1,6 @@
 import discord
 
-from Utils.errors import CodeError
+from .errors import CodeError
 
 
 def get_student_nick(name: str) -> str:
