@@ -87,9 +87,54 @@ def remove_user(discord_id: int, connection=None):
     execute_query(query, (discord_id,), connection)
 
 
-def get_user(discord_id: int, connection=None):
+class DBUser:
+    def __init__(self, id, discord_id, username, discriminator, real_name, hours_in_class, icon, user_type):
+        self.id = id
+        self.discord_id = discord_id
+        self.username = username
+        self.discriminator = discriminator
+        self.real_name = real_name
+        self.hours_in_class = hours_in_class
+        self.icon = icon
+        self.user_type = user_type
+
+    id: int
+    discord_id: int
+    username: str
+    discriminator: str
+    real_name: str
+    hours_in_class: int
+    icon: str
+    user_type: str
+
+    @staticmethod
+    def get_user(discord_id: int, connection=None):
+        return get_user(discord_id, connection)
+
+    def save(self, connection=None):
+        query = '''
+        UPDATE users
+        SET username = ?, discriminator = ?, real_name = ?, hours_in_class = ?, icon = ?, user_type = ?
+        WHERE discord_id = ?
+        '''
+        execute_query(query, (self.username, self.discriminator, self.real_name, self.hours_in_class, self.icon, self.user_type, self.discord_id), connection)
+
+
+def get_user(discord_id: int, connection=None) -> DBUser:
     query = 'SELECT * FROM users WHERE discord_id = ?'
-    return execute_query(query, (discord_id,), connection, fetchone=True)
+    result = execute_query(query, (discord_id,), connection, fetchone=True)
+    if result:
+        return DBUser(
+            id=result[0],
+            discord_id=result[1],
+            username=result[2],
+            discriminator=result[3],
+            real_name=result[4],
+            hours_in_class=result[5],
+            icon=result[6],
+            user_type=result[7]
+        )
+    raise ValueError("User not found")
 
 
 def update_user_hours(discord_id: int, hours: int, connection=None):
