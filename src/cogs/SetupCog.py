@@ -17,7 +17,7 @@ class SetupCog(commands.Cog):
 
     @app_commands.command(
         name="setup-server",
-        description="Initialisiert den Server für die Nutzung des Bots. *Nur der Server-Besitzer kann diesen Befehl verwenden.*"
+        description="Initialisiert den Server für die Nutzung des Bots."
     )
     async def setup_server(self, interaction: discord.Interaction):
         if interaction.guild is None:

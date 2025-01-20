@@ -32,6 +32,8 @@ async def setup_server(guild: Guild):
     general_channel = await __create_text_channel_if_not_exists(guild, 'allgemein', text_category)
     teacher_chat_channel = await __create_text_channel_if_not_exists(guild, 'lehrer-chat', text_category)
 
+    logs_channel = await __create_text_channel_if_not_exists(guild, 'logs', information_category)
+
     lounge_voice_channel = await __create_voice_channel_if_not_exists(guild, 'lounge', voice_category)
     classroom_voice_channel = await __create_voice_channel_if_not_exists(guild, 'klassenzimmer', voice_category)
 
@@ -114,6 +116,27 @@ async def setup_server(guild: Guild):
             teacher_role: PermissionOverwrite(
                 view_channel=True,
                 manage_messages=False
+            ),
+            admin_role: PermissionOverwrite(
+                view_channel=False
+            )
+        }
+    )
+
+    await logs_channel.edit(
+        overwrites={
+            guild.default_role: PermissionOverwrite(
+                view_channel=False
+            ),
+            student_role: PermissionOverwrite(
+                view_channel=False
+            ),
+            teacher_role: PermissionOverwrite(
+                view_channel=False
+            ),
+            admin_role: PermissionOverwrite(
+                send_messages=False,
+                view_channel=True
             )
         }
     )
