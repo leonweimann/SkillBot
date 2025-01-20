@@ -21,10 +21,10 @@ def create_tables():
                 discord_id TEXT NOT NULL UNIQUE,
                 username TEXT NOT NULL,
                 discriminator TEXT NOT NULL,
-                real_name TEXT,
+                real_name TEXT DEFAULT NULL,
                 hours_in_class INTEGER DEFAULT 0,
                 icon TEXT,
-                user_type TEXT CHECK(user_type IN ('teacher', 'student')) NOT NULL
+                user_type TEXT CHECK(user_type IN ('admin', 'teacher', 'student', 'none')) NOT NULL
             )
             ''')
             cursor.execute('''
@@ -74,7 +74,7 @@ def execute_query(query, params=(), connection=None, fetchone=False, fetchall=Fa
     return result
 
 
-def add_user(discord_id, username, discriminator, real_name, icon, user_type, connection=None):
+def add_user(discord_id: int, username: str, discriminator: str, real_name: str | None, icon: str, user_type: str, connection=None):
     query = '''
     INSERT INTO users (discord_id, username, discriminator, real_name, icon, user_type)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -82,22 +82,37 @@ def add_user(discord_id, username, discriminator, real_name, icon, user_type, co
     execute_query(query, (discord_id, username, discriminator, real_name, icon, user_type), connection)
 
 
-def get_user(discord_id, connection=None):
+def remove_user(discord_id: int, connection=None):
+    query = 'DELETE FROM users WHERE discord_id = ?'
+    execute_query(query, (discord_id,), connection)
+
+
+def get_user(discord_id: int, connection=None):
     query = 'SELECT * FROM users WHERE discord_id = ?'
     return execute_query(query, (discord_id,), connection, fetchone=True)
 
 
-def update_user_hours(discord_id, hours, connection=None):
+def update_user_hours(discord_id: int, hours: int, connection=None):
     query = 'UPDATE users SET hours_in_class = ? WHERE discord_id = ?'
     execute_query(query, (hours, discord_id), connection)
 
 
-def update_user_icon(discord_id, icon, connection=None):
+def update_user_real_name(discord_id: int, real_name: str, connection=None):
+    query = 'UPDATE users SET real_name = ? WHERE discord_id = ?'
+    execute_query(query, (real_name, discord_id), connection)
+
+
+def update_user_type(discord_id: int, user_type: str, connection=None):
+    query = 'UPDATE users SET user_type = ? WHERE discord_id = ?'
+    execute_query(query, (user_type, discord_id), connection)
+
+
+def update_user_icon(discord_id: int, icon: str, connection=None):
     query = 'UPDATE users SET icon = ? WHERE discord_id = ?'
     execute_query(query, (icon, discord_id), connection)
 
 
-def add_channel(discord_id, user_id, connection=None):
+def add_channel(discord_id: int, user_id, connection=None):
     query = 'INSERT INTO channels (discord_id, user_id) VALUES (?, ?)'
     execute_query(query, (discord_id, user_id), connection)
 
@@ -120,7 +135,3 @@ def get_students_of_teacher(teacher_id, connection=None):
 def get_teacher_of_student(student_id, connection=None):
     query = 'SELECT teacher_id FROM teacher_student WHERE student_id = ?'
     return execute_query(query, (student_id,), connection, fetchone=True)
-
-
-# Call create_tables to ensure the tables are created when the module is imported
-create_tables()

@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import os
 import asyncio
 
+from Utils.database import create_tables
+
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
@@ -41,5 +43,7 @@ async def main():
         await load_cogs()
         await bot.start(get_discord_token())
 
+
+create_tables()
 
 asyncio.run(main())
