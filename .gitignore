@@ -14,3 +14,6 @@ env/
 
 # Ignore system files
 .DS_Store
+
+# Ignore VSCode settings
+.vscode/
