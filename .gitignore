@@ -9,5 +9,11 @@ __pycache__/
 venv/
 env/
 
+# Ignore database files
+*.db
+
 # Ignore system files
 .DS_Store
+
+# Ignore VSCode settings
+.vscode/
