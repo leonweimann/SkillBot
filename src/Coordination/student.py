@@ -1,6 +1,7 @@
 import discord
 
 from Utils.channels import get_category_by_name, get_channel_by_name
+from Utils.database import DBUser
 from Utils.errors import CodeError, UsageError
 from Utils.members import get_student_nick, get_name_by_nick, get_member_by_user
 from Utils.roles import get_student_role, get_teacher_role
@@ -35,6 +36,10 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
     await student.edit(nick=get_student_nick(name))
 
     await new_student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
+
+
+async def assign_student_database(db_student: DBUser):
+    pass
 
 
 async def unassign_student(interaction: discord.Interaction, student: discord.Member):
