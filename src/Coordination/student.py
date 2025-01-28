@@ -35,11 +35,18 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
     await student.add_roles(student_role)
     await student.edit(nick=get_student_nick(name))
 
+    # Assign student in database
+    assign_student_database(student.id, name, '🎒', 'student')
+
     await new_student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
 
 
-async def assign_student_database(db_student: DBUser):
-    pass
+def assign_student_database(student_id: int, real_name: str, icon: str, user_type: str):
+    db_user = DBUser.get_user(student_id)
+    db_user.real_name = real_name
+    db_user.icon = icon
+    db_user.user_type = user_type
+    db_user.save()
 
 
 async def unassign_student(interaction: discord.Interaction, student: discord.Member):
@@ -70,5 +77,16 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
     student_channel = get_channel_by_name(interaction.guild, student_channel_name)
     await student_channel.delete()
 
+    # Unassign student in database
+    unassign_student_database(student.id)
+
     await student.remove_roles(student_role)
     await student.edit(nick=None)
+
+
+def unassign_student_database(student_id: int):
+    db_user = DBUser.get_user(student_id)
+    db_user.real_name = None
+    db_user.icon = ''
+    db_user.user_type = 'none'
+    db_user.save()

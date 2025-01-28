@@ -102,7 +102,7 @@ class DBUser:
     discord_id: int
     username: str
     discriminator: str
-    real_name: str
+    real_name: str | None
     hours_in_class: int
     icon: str
     user_type: str
