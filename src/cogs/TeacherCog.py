@@ -23,11 +23,17 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
         await _assign_teacher(interaction, member, teacher_name)
-        await interaction.response.send_message(success_msg(f"Lehrer {member.mention} registriert"))
+        if interaction.response.is_done():
+            await interaction.followup.send(success_msg(f"Lehrer {member.mention} registriert"))
+        else:
+            await interaction.response.send_message(success_msg(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send(self.__create_app_command_error_msg(error), ephemeral=True)
+        else:
+            await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
 
     @app_commands.command(
         name='unassign_teacher',
@@ -36,11 +42,17 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def unassign_teacher(self, interaction: discord.Interaction, member: discord.Member):
         await _unassign_teacher(interaction, member)
-        await interaction.response.send_message(success_msg(f"Lehrer {member.mention} abgemeldet"))
+        if interaction.response.is_done():
+            await interaction.followup.send(success_msg(f"Lehrer {member.mention} abgemeldet"))
+        else:
+            await interaction.response.send_message(success_msg(f"Lehrer {member.mention} abgemeldet"))
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send(self.__create_app_command_error_msg(error), ephemeral=True)
+        else:
+            await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:

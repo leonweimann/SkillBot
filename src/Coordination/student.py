@@ -43,7 +43,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
 def assign_student_database(teacher_id: int, student_id: int, real_name: str):
     db_user = DBUser(student_id)
     db_user.edit(real_name=real_name, icon='🎒', user_type='student')
-    DatabaseManager.add_student_teacher(teacher_id, student_id)
+    DatabaseManager.add_student_teacher(student_id, teacher_id)
 
 
 async def unassign_student(interaction: discord.Interaction, student: discord.Member):
