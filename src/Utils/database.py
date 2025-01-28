@@ -24,7 +24,7 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS teacher_student (
                     teacher_id INTEGER NOT NULL,
-                    student_id INTEGER NOT NULL,
+                    student_id INTEGER NOT NULL UNIQUE,
                     PRIMARY KEY (teacher_id, student_id),
                     FOREIGN KEY (teacher_id) REFERENCES users (id),
                     FOREIGN KEY (student_id) REFERENCES users (id)
@@ -41,12 +41,16 @@ class DatabaseManager:
             return cursor
 
     @staticmethod
-    def add_student_teacher(teacher_id: int, student_id: int):
-        DatabaseManager._execute('INSERT INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
+    def add_student_teacher(student_id: int, teacher_id: int):
+        DatabaseManager._execute('INSERT OR IGNORE INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
 
     @staticmethod
     def remove_student_teacher(student_id: int):
         DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', student_id)
+
+    @staticmethod
+    def get_student_teacher(student_id: int) -> int:  # Returns teacher_id
+        return DatabaseManager._execute('SELECT teacher_id FROM teacher_student WHERE student_id = ?', student_id).fetchone()[0]
 
 
 class DBUser:
@@ -92,6 +96,11 @@ match __name__:
 
     case '__main__':
         DatabaseManager._create_tables()
-        user = DBUser(4242424242)
-        user.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
-        print(user.__dict__)
+
+        student = DBUser(2424242424)
+        student.edit(user_type='student', icon='🎒', real_name='Ben Werner (TEST)')
+        teacher = DBUser(4242424242)
+        teacher.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
+        DatabaseManager.add_student_teacher(student.id, teacher.id)
+
+        print(student.__dict__, teacher.__dict__, sep='\n', end='\n\n')

@@ -29,6 +29,8 @@ async def assign_teacher(interaction: discord.Interaction, teacher: discord.Memb
     new_teacher_category = await interaction.guild.create_category(teacher_nick, overwrites=overwrites)
     new_teacher_cmd_channel = await interaction.guild.create_text_channel('cmd', category=new_teacher_category, overwrites=overwrites)
 
+    assign_teacher_database(teacher.id, name)
+
     await new_teacher_cmd_channel.send(f"👋 Willkommen, {teacher.mention}! Hier kannst du ungestört Befehle ausführen.")
 
 
@@ -59,7 +61,9 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
         await channel.delete()
     await teacher_category.delete()
 
+    unassign_teacher_database(teacher.id)
+
 
 def unassign_teacher_database(teacher_id: int):
     db_user = DBUser(teacher_id)
-    db_user.edit(real_name=None, icon=None, user_type=None)
+    db_user.edit(icon=None, user_type=None)
