@@ -41,6 +41,10 @@ class DatabaseManager:
             return cursor
 
     @staticmethod
+    def remove_user(user_id: int):
+        DatabaseManager._execute('DELETE FROM users WHERE id = ?', user_id)
+
+    @staticmethod
     def add_student_teacher(student_id: int, teacher_id: int):
         DatabaseManager._execute('INSERT OR IGNORE INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
 
