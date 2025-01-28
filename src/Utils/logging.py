@@ -13,7 +13,7 @@ async def log(guild: Guild, message: str, details: dict[str, str] = {}):
     if details:
         max_key_length = max(len(key) for key in details.keys())
         for key, value in details.items():
-            res += f'{key}{" " * (max_key_length - len(key))} | {value}\n'
+            res += f'{key}{" " * (max_key_length - len(key))} | {value if value != '' else 'None'}\n'
     res += '```'
     res += f'\n{"-" * 20}'
     await logs_channel.send(res)

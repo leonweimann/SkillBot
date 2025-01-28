@@ -4,8 +4,8 @@ from discord.ext import commands
 
 from Coordination.teacher import assign_teacher as _assign_teacher, unassign_teacher as _unassign_teacher
 
-from Utils.errors import CodeError, UsageError
-from Utils.msg import error_msg, success_msg
+from Utils.errors import *
+from Utils.msg import *
 
 
 class TeacherCog(commands.Cog):
@@ -23,11 +23,11 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
         await _assign_teacher(interaction, member, teacher_name)
-        await interaction.response.send_message(success_msg(f"Lehrer {member.mention} registriert"))
+        await save_respond(interaction, success_msg(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
+        await save_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
 
     @app_commands.command(
         name='unassign_teacher',
@@ -36,11 +36,11 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def unassign_teacher(self, interaction: discord.Interaction, member: discord.Member):
         await _unassign_teacher(interaction, member)
-        await interaction.response.send_message(success_msg(f"Lehrer {member.mention} abgemeldet"))
+        await save_respond(interaction, success_msg(f"Lehrer {member.mention} abgemeldet"))
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await interaction.response.send_message(self.__create_app_command_error_msg(error), ephemeral=True)
+        await save_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
