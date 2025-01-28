@@ -1,3 +1,5 @@
+import discord
+
 from .errors import CodeError
 
 
@@ -7,3 +9,10 @@ def error_msg(msg: str, error=None) -> str:
 
 def success_msg(msg: str) -> str:
     return f"✅ {msg}"
+
+
+async def save_respond(interaction: discord.Interaction, content: str, ephemeral=False):
+    if interaction.response.is_done():
+        await interaction.followup.send(content, ephemeral=ephemeral)
+    else:
+        await interaction.response.send_message(content, ephemeral=ephemeral)
