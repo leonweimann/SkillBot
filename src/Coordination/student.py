@@ -42,11 +42,8 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
 
 
 def assign_student_database(student_id: int, real_name: str, icon: str, user_type: str):
-    db_user = DBUser.get_user(student_id)
-    db_user.real_name = real_name
-    db_user.icon = icon
-    db_user.user_type = user_type
-    db_user.save()
+    db_user = DBUser(student_id)
+    db_user.edit(real_name=real_name, icon=icon, user_type=user_type)
 
 
 async def unassign_student(interaction: discord.Interaction, student: discord.Member):
@@ -84,9 +81,6 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
     await student.edit(nick=None)
 
 
-def unassign_student_database(student_id: int):
-    db_user = DBUser.get_user(student_id)
-    db_user.real_name = None
-    db_user.icon = ''
-    db_user.user_type = 'none'
-    db_user.save()
+def unassign_student_database(student_discord_id: int):
+    db_user = DBUser(student_discord_id)
+    db_user.edit(real_name=None, icon=None, user_type=None)
