@@ -1,6 +1,7 @@
 import discord
 
 from Utils.channels import get_category_by_name
+from Utils.database import DBUser
 from Utils.errors import CodeError, UsageError
 from Utils.members import get_teacher_nick
 from Utils.roles import get_teacher_role
@@ -31,6 +32,11 @@ async def assign_teacher(interaction: discord.Interaction, teacher: discord.Memb
     await new_teacher_cmd_channel.send(f"👋 Willkommen, {teacher.mention}! Hier kannst du ungestört Befehle ausführen.")
 
 
+def assign_teacher_database(teacher_id: int, real_name: str):
+    db_user = DBUser(teacher_id)
+    db_user.edit(real_name=real_name, icon='🎓', user_type='teacher')
+
+
 async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Member):
     if interaction.guild is None:
         raise CodeError('Guild is None')
@@ -52,3 +58,8 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
     for channel in teacher_category.text_channels:
         await channel.delete()
     await teacher_category.delete()
+
+
+def unassign_teacher_database(teacher_id: int):
+    db_user = DBUser(teacher_id)
+    db_user.edit(real_name=None, icon=None, user_type=None)

@@ -23,8 +23,8 @@ class DatabaseManager:
             ''')
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS teacher_student (
-                    teacher_id TEXT NOT NULL,
-                    student_id TEXT NOT NULL,
+                    teacher_id INTEGER NOT NULL,
+                    student_id INTEGER NOT NULL,
                     PRIMARY KEY (teacher_id, student_id),
                     FOREIGN KEY (teacher_id) REFERENCES users (id),
                     FOREIGN KEY (student_id) REFERENCES users (id)
@@ -39,6 +39,14 @@ class DatabaseManager:
             cursor.execute(query, args)
             conn.commit()
             return cursor
+
+    @staticmethod
+    def add_student_teacher(teacher_id: int, student_id: int):
+        DatabaseManager._execute('INSERT INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
+
+    @staticmethod
+    def remove_student_teacher(student_id: int):
+        DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', student_id)
 
 
 class DBUser:
@@ -78,8 +86,12 @@ class DBUser:
         self.save()
 
 
-if __name__ == '__main__':
-    DatabaseManager._create_tables()
-    user = DBUser(1234567890)
-    user.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann')
-    print(user.__dict__)
+match __name__:
+    case 'Utils.database':
+        DatabaseManager._create_tables()
+
+    case '__main__':
+        DatabaseManager._create_tables()
+        user = DBUser(4242424242)
+        user.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
+        print(user.__dict__)
