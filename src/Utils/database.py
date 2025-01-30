@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import datetime
 
 
 class DatabaseManager:
@@ -18,7 +19,7 @@ class DatabaseManager:
                     real_name TEXT DEFAULT NULL,
                     icon TEXT DEFAULT NULL,
                     user_type TEXT CHECK(user_type IN ('admin', 'teacher', 'student')) DEFAULT NULL,
-                    hours_in_class INTEGER NOT NULL DEFAULT 0
+                    hours_in_class REAL NOT NULL DEFAULT 0.0
                 )
             ''')
             cursor.execute('''
@@ -28,6 +29,15 @@ class DatabaseManager:
                     PRIMARY KEY (teacher_id, student_id),
                     FOREIGN KEY (teacher_id) REFERENCES users (id),
                     FOREIGN KEY (student_id) REFERENCES users (id)
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_voice_channel_join (
+                    user_id INTEGER NOT NULL,
+                    voice_channel_id INTEGER NOT NULL,
+                    join_time TIMESTAMP NOT NULL,
+                    PRIMARY KEY (user_id, join_time),
+                    FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
             conn.commit()
@@ -56,6 +66,37 @@ class DatabaseManager:
     def get_student_teacher(student_id: int) -> int:  # Returns teacher_id
         return DatabaseManager._execute('SELECT teacher_id FROM teacher_student WHERE student_id = ?', student_id).fetchone()[0]
 
+    @staticmethod
+    def add_user_voice_channel_join(user_id: int, voice_channel_id: int):
+        DatabaseManager._execute('INSERT INTO user_voice_channel_join (user_id, voice_channel_id, join_time) VALUES (?, ?, CURRENT_TIMESTAMP)', user_id, voice_channel_id)
+
+    @staticmethod
+    def remove_user_voice_channel_join(user_id: int):
+        DatabaseManager._execute('DELETE FROM user_voice_channel_join WHERE user_id = ?', user_id)
+
+    @staticmethod
+    def get_user_voice_channel_join(user_id: int) -> str:  # Returns the join_time
+        return DatabaseManager._execute('SELECT join_time FROM user_voice_channel_join WHERE user_id = ?', user_id).fetchone()[0]
+
+    @staticmethod
+    def transfer_hours_in_class_from_user_voice_channel_join(user_id: int):
+        with DatabaseManager._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT join_time FROM user_voice_channel_join WHERE user_id = ?
+            ''', (user_id,))
+            join_time = cursor.fetchone()
+            if join_time:
+                join_time = datetime.strptime(join_time[0], '%Y-%m-%d %H:%M:%S')
+                time_in_class = (datetime.now() - join_time).total_seconds() / 3600.0
+                cursor.execute('''
+                    UPDATE users SET hours_in_class = hours_in_class + ? WHERE id = ?
+                ''', (time_in_class, user_id))
+                cursor.execute('''
+                    DELETE FROM user_voice_channel_join WHERE user_id = ?
+                ''', (user_id,))
+            conn.commit()
+
 
 class DBUser:
     def __init__(self, discord_id: int):
@@ -75,7 +116,7 @@ class DBUser:
             self.real_name = None
             self.icon = None
             self.user_type = None
-            self.hours_in_class = 0
+            self.hours_in_class = 0.0
 
     def save(self):
         DatabaseManager._execute('''
@@ -92,6 +133,18 @@ class DBUser:
         for key, value in kwargs.items():
             setattr(self, key, value)
         self.save()
+
+    def save_voice_channel_join(self, voice_channel_id: int):
+        DatabaseManager.add_user_voice_channel_join(self.id, voice_channel_id)
+
+    def remove_voice_channel_join(self):
+        DatabaseManager.remove_user_voice_channel_join(self.id)
+
+    def get_voice_channel_join(self) -> str:
+        return DatabaseManager.get_user_voice_channel_join(self.id)
+
+    def transfer_hours_in_class_from_user_voice_channel_join(self):
+        DatabaseManager.transfer_hours_in_class_from_user_voice_channel_join(self.id)
 
 
 match __name__:
