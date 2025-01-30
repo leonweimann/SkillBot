@@ -55,6 +55,32 @@ class LevelingCog(commands.Cog):
         db_user = DBUser(user.id)
         await interaction.response.send_message(f'{user.mention} hat insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.', ephemeral=True)
 
+    @app_commands.command(
+        name='set_hours',
+        description="Setzt die Gesamtzeit, die ein Benutzer im 'klassenzimmer' verbracht hat."
+    )
+    @commands.has_role('Admin')
+    async def set_hours(self, interaction: discord.Interaction, user: discord.Member, hours: int):
+        """
+        Command that allows users to set the total time spent in the voice channel 'klassenzimmer'.
+        """
+        if interaction.guild is None:
+            await interaction.response.send_message(error_msg('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
+            return
+
+        db_user = DBUser(user.id)
+        db_user.hours_in_class = hours
+        await interaction.response.send_message(f'{user.mention} hat jetzt insgesamt {hours} Stunden im "klassenzimmer" verbracht.', ephemeral=True)
+
+    @set_hours.error
+    async def set_hours_error(self, interaction, error):
+        if isinstance(error, commands.MissingRole):
+            await interaction.response.send_message(error_msg('Du hast nicht die Berechtigung, diesen Befehl auszuführen.'), ephemeral=True)
+        else:
+            msg = error_msg('Ein Fehler ist aufgetreten.', error)
+            await log(interaction.guild, msg, {'Used by': f'{interaction.user.mention}'})
+            await interaction.response.send_message(msg, ephemeral=True)
+
 
 async def setup(bot):
     await bot.add_cog(LevelingCog(bot))
