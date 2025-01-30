@@ -11,7 +11,7 @@ def success_msg(msg: str) -> str:
     return f"✅ {msg}"
 
 
-async def save_respond(interaction: discord.Interaction, content: str, ephemeral=False):
+async def safe_respond(interaction: discord.Interaction, content: str, ephemeral=False):
     if interaction.response.is_done():
         await interaction.followup.send(content, ephemeral=ephemeral)
     else:
