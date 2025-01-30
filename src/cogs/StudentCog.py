@@ -5,6 +5,7 @@ from discord.ext import commands
 from Coordination.student import assign_student as _assign_student, unassign_student as _unassign_student
 
 from Utils.errors import CodeError, UsageError
+from Utils.logging import log
 from Utils.msg import *
 
 
@@ -27,7 +28,12 @@ class StudentCog(commands.Cog):
 
     @assign_student.error
     async def assign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await safe_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
+        msg = self.__create_app_command_error_msg(error)
+
+        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
+            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+
+        await safe_respond(interaction, msg, ephemeral=True)
 
     @app_commands.command(
         name='unassign_student',
@@ -40,7 +46,12 @@ class StudentCog(commands.Cog):
 
     @unassign_student.error
     async def unassign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await safe_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
+        msg = self.__create_app_command_error_msg(error)
+
+        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
+            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+
+        await safe_respond(interaction, msg, ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
