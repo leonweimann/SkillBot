@@ -53,14 +53,14 @@ class LevelingCog(commands.Cog):
                 return
 
         db_user = DBUser(user.id)
-        await interaction.response.send_message(f'{user.mention} hat insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.', ephemeral=True)
+        await interaction.response.send_message(f'{user.mention} hat insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 
     @app_commands.command(
         name='set_hours',
         description="Setzt die Gesamtzeit, die ein Benutzer im 'klassenzimmer' verbracht hat."
     )
     @commands.has_role('Admin')
-    async def set_hours(self, interaction: discord.Interaction, user: discord.Member, hours: int):
+    async def set_hours(self, interaction: discord.Interaction, user: discord.Member, hours: float):
         """
         Command that allows users to set the total time spent in the voice channel 'klassenzimmer'.
         """
@@ -69,8 +69,8 @@ class LevelingCog(commands.Cog):
             return
 
         db_user = DBUser(user.id)
-        db_user.hours_in_class = hours
-        await interaction.response.send_message(f'{user.mention} hat jetzt insgesamt {hours} Stunden im "klassenzimmer" verbracht.', ephemeral=True)
+        db_user.edit(hours_in_class=hours)
+        await interaction.response.send_message(f'{user.mention} hat jetzt insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 
     @set_hours.error
     async def set_hours_error(self, interaction, error):
