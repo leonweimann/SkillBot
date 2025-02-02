@@ -5,7 +5,7 @@ from discord.ext import commands
 from Utils.errors import UsageError
 from Utils.logging import log
 from Utils.msg import error_msg, success_msg, safe_respond
-from Utils.setup import setup_server as _setup_server
+from Coordination.setup import setup_server as _setup_server
 
 
 class SetupCog(commands.Cog):
