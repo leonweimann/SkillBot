@@ -3,7 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from Utils.errors import UsageError
-from Utils.msg import error_msg, success_msg
+from Utils.logging import log
+from Utils.msg import error_msg, success_msg, safe_respond
 from Utils.setup import setup_server as _setup_server
 
 
@@ -39,11 +40,16 @@ class SetupCog(commands.Cog):
     async def setup_server_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         match error:
             case app_commands.MissingRole():
-                await interaction.followup.send(error_msg("Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren."), ephemeral=True)
+                msg = error_msg("Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.")
             case UsageError():
-                await interaction.followup.send(error_msg(str(error)), ephemeral=True)
+                msg = error_msg(str(error))
             case _:
-                await interaction.followup.send(error_msg("Ein unbekannter Fehler ist aufgetreten.", error), ephemeral=True)
+                msg = error_msg("Ein unbekannter Fehler ist aufgetreten.", error)
+
+        if interaction.guild and not isinstance(error, UsageError):
+            await log(interaction.guild, msg)
+
+        await safe_respond(interaction, msg, ephemeral=True)
 
 
 async def setup(bot):

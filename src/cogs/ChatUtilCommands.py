@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from Utils.logging import log
 from Utils.msg import *
 
 
@@ -33,7 +34,12 @@ class ChatUtilCommands(commands.Cog):
             case app_commands.MissingRole():
                 await interaction.response.send_message(error_msg("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen."), ephemeral=True)
             case _:
-                await interaction.response.send_message(error_msg("Ein unbekannter Fehler ist aufgetreten.", error), ephemeral=True)
+                msg = error_msg("Ein unbekannter Fehler ist aufgetreten.", error)
+
+                if interaction.guild:
+                    await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+
+                await interaction.response.send_message(msg, ephemeral=True)
 
 
 async def setup(bot):

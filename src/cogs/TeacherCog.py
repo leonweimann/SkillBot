@@ -5,6 +5,7 @@ from discord.ext import commands
 from Coordination.teacher import assign_teacher as _assign_teacher, unassign_teacher as _unassign_teacher
 
 from Utils.errors import *
+from Utils.logging import log
 from Utils.msg import *
 
 
@@ -23,11 +24,16 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
         await _assign_teacher(interaction, member, teacher_name)
-        await save_respond(interaction, success_msg(f"Lehrer {member.mention} registriert"))
+        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await save_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
+        msg = self.__create_app_command_error_msg(error)
+
+        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
+            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+
+        await safe_respond(interaction, msg, ephemeral=True)
 
     @app_commands.command(
         name='unassign_teacher',
@@ -36,11 +42,16 @@ class TeacherCog(commands.Cog):
     @app_commands.checks.has_role('Admin')
     async def unassign_teacher(self, interaction: discord.Interaction, member: discord.Member):
         await _unassign_teacher(interaction, member)
-        await save_respond(interaction, success_msg(f"Lehrer {member.mention} abgemeldet"))
+        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} abgemeldet"))
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        await save_respond(interaction, self.__create_app_command_error_msg(error), ephemeral=True)
+        msg = self.__create_app_command_error_msg(error)
+
+        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
+            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+
+        await safe_respond(interaction, msg, ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
