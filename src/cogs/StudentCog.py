@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Coordination.student import assign_student as _assign_student, unassign_student as _unassign_student
+import Coordination.student as student
 
 from Utils.errors import CodeError, UsageError
 from Utils.logging import log
@@ -23,17 +23,12 @@ class StudentCog(commands.Cog):
     )
     @app_commands.checks.has_role('Lehrer')
     async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str, silent: bool = False):
-        await _assign_student(interaction, member, student_name, silent)
+        await student.assign_student(interaction, member, student_name, silent)
         await safe_respond(interaction, success_msg(f"Schüler {member.mention} registriert"))
 
     @assign_student.error
     async def assign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = self.__create_app_command_error_msg(error)
-
-        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
-        await safe_respond(interaction, msg, ephemeral=True)
+        await self.__handle_app_command_error(interaction, error, 'assign_student')
 
     @app_commands.command(
         name='unassign_student',
@@ -41,16 +36,43 @@ class StudentCog(commands.Cog):
     )
     @app_commands.checks.has_role('Lehrer')
     async def unassign_student(self, interaction: discord.Interaction, member: discord.Member):
-        await _unassign_student(interaction, member)
+        await student.unassign_student(interaction, member)
         await safe_respond(interaction, success_msg(f"Schüler {member.mention} abgemeldet"))
 
     @unassign_student.error
     async def unassign_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self.__handle_app_command_error(interaction, error, 'unassign_student')
+
+    @app_commands.command(
+        name='stash-student',
+        description='Verschiebt einen Schüler ins Archiv'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def stash_student(self, interaction: discord.Interaction, member: discord.Member):
+        await student.stash_student(interaction, member)
+        await safe_respond(interaction, success_msg(f"Schüler {member.mention} archiviert"))
+
+    @stash_student.error
+    async def stash_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self.__handle_app_command_error(interaction, error, 'stash-student')
+
+    @app_commands.command(
+        name='pop-student',
+        description='Holt einen Schüler aus dem Archiv'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def pop_student(self, interaction: discord.Interaction, member: discord.Member):
+        await student.pop_student(interaction, member)
+        await safe_respond(interaction, success_msg(f"Schüler {member.mention} aus dem Archiv geholt"))
+
+    @pop_student.error
+    async def pop_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self.__handle_app_command_error(interaction, error, 'pop-student')
+
+    async def __handle_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError, command_name: str):
         msg = self.__create_app_command_error_msg(error)
-
         if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
+            await log(interaction.guild, msg, details={'Command': command_name, 'Used by': f'{interaction.user.mention}'})
         await safe_respond(interaction, msg, ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:

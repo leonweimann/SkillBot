@@ -26,6 +26,7 @@ async def setup_server(guild: Guild):
     information_category = await __create_category_if_not_exists(guild, 'Informationen')
     text_category = await __create_category_if_not_exists(guild, 'Textkanäle')
     voice_category = await __create_category_if_not_exists(guild, 'Sprachkanäle')
+    await __create_category_if_not_exists(guild, '📚 Wissensbereich')
 
     new_members_channel = await __create_text_channel_if_not_exists(guild, 'neue-mitglieder', information_category)
 
