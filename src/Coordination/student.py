@@ -7,7 +7,7 @@ from Utils.members import get_student_nick, get_member_by_user, generate_student
 from Utils.roles import get_student_role, get_teacher_role
 
 
-async def assign_student(interaction: discord.Interaction, student: discord.Member, name: str):
+async def assign_student(interaction: discord.Interaction, student: discord.Member, name: str, silent: bool = False):
     if interaction.guild is None:
         raise CodeError("Guild is None")
 
@@ -37,7 +37,8 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
 
     assign_student_database(interaction.user.id, student.id, name)
 
-    await new_student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
+    if not silent:
+        await new_student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
 
 
 def assign_student_database(teacher_id: int, student_id: int, real_name: str):
