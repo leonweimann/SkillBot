@@ -134,6 +134,12 @@ class DBUser:
             setattr(self, key, value)
         self.save()
 
+    @property
+    def teacher_id(self) -> int | None:
+        if self.user_type == 'student':
+            return DatabaseManager.get_student_teacher(self.id)
+        return None
+
     def save_voice_channel_join(self, voice_channel_id: int):
         DatabaseManager.add_user_voice_channel_join(self.id, voice_channel_id)
 
