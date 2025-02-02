@@ -30,7 +30,10 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
         teacher: discord.PermissionOverwrite(read_messages=True)
     }
 
-    new_student_channel = await interaction.guild.create_text_channel(name, category=teachers_category, overwrites=overwrites)
+    student_channel = discord.utils.get(interaction.guild.text_channels, name=generate_student_channel_name(name))
+    if student_channel is None:
+        # Create channel since it doesn't exist yet
+        student_channel = await interaction.guild.create_text_channel(name, category=teachers_category, overwrites=overwrites)
 
     # Only add roles and nick if channel was created successfully
     await student.add_roles(student_role)
@@ -39,7 +42,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
     assign_student_database(interaction.user.id, student.id, name)
 
     if not silent:
-        await new_student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
+        await student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
 
 
 def assign_student_database(teacher_id: int, student_id: int, real_name: str):
