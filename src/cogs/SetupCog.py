@@ -2,8 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Utils.errors import UsageError
+import Utils.environment as env
+from Utils.errors import CodeError, UsageError
+from Utils.database import DBUser
 from Utils.logging import log
+from Utils.members import get_student_nick
 from Utils.msg import error_msg, success_msg, safe_respond
 from Coordination.setup import setup_server as _setup_server
 
@@ -50,6 +53,34 @@ class SetupCog(commands.Cog):
             await log(interaction.guild, msg)
 
         await safe_respond(interaction, msg, ephemeral=True)
+
+    @app_commands.command(
+        name='update-realname',
+        description="Aktualisiert den echten Namen des Benutzers."
+    )
+    async def update_realname(self, interaction: discord.Interaction, user: discord.Member, new_realname: str):
+        if interaction.guild is None:
+            raise UsageError("Dieser Befehl kann nur in einem Server verwendet werden.")
+
+        if interaction.user.id != user.id:
+            if not isinstance(interaction.user, discord.Member):
+                raise CodeError("Der Benutzer ist kein Mitglied des Servers.")
+
+            admin_role = discord.utils.get(interaction.guild.roles, name='Admin')
+            if admin_role is None:
+                raise CodeError("Die Rolle 'Admin' existiert nicht.")
+            teacher_role = env.get_teacher_role(interaction.guild)
+
+            if admin_role not in interaction.user.roles and teacher_role not in interaction.user.roles:
+                raise app_commands.MissingRole('Du musst Admin oder Lehrer sein, um den echten Namen eines anderen Benutzers zu aktualisieren.')
+
+        # Update realname
+        await user.edit(nick=get_student_nick(new_realname))
+
+        db_user = DBUser(user.id)
+        db_user.edit(real_name=new_realname)
+
+        await interaction.response.send_message(success_msg(f"Der echte Name von {user.mention} wurde erfolgreich zu '{new_realname}' aktualisiert."))
 
 
 async def setup(bot):
