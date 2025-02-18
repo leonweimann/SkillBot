@@ -1,6 +1,6 @@
-import sqlite3
-import os
 from datetime import datetime
+import os
+import sqlite3
 
 
 class DatabaseManager:
@@ -26,6 +26,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS teacher_student (
                     teacher_id INTEGER NOT NULL,
                     student_id INTEGER NOT NULL UNIQUE,
+                    channel_id INTEGER NOT NULL UNIQUE,
                     PRIMARY KEY (teacher_id, student_id),
                     FOREIGN KEY (teacher_id) REFERENCES users (id),
                     FOREIGN KEY (student_id) REFERENCES users (id)
@@ -54,17 +55,17 @@ class DatabaseManager:
     def remove_user(user_id: int):
         DatabaseManager._execute('DELETE FROM users WHERE id = ?', user_id)
 
-    @staticmethod
-    def add_student_teacher(student_id: int, teacher_id: int):
-        DatabaseManager._execute('INSERT OR IGNORE INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
+    # @staticmethod
+    # def add_student_teacher(student_id: int, teacher_id: int):
+    #     DatabaseManager._execute('INSERT OR IGNORE INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
 
-    @staticmethod
-    def remove_student_teacher(student_id: int):
-        DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', student_id)
+    # @staticmethod
+    # def remove_student_teacher(student_id: int):
+    #     DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', student_id)
 
-    @staticmethod
-    def get_student_teacher(student_id: int) -> int:  # Returns teacher_id
-        return DatabaseManager._execute('SELECT teacher_id FROM teacher_student WHERE student_id = ?', student_id).fetchone()[0]
+    # @staticmethod
+    # def get_student_teacher(student_id: int) -> int:  # Returns teacher_id
+    #     return DatabaseManager._execute('SELECT teacher_id FROM teacher_student WHERE student_id = ?', student_id).fetchone()[0]
 
     @staticmethod
     def add_user_voice_channel_join(user_id: int, voice_channel_id: int):
@@ -137,7 +138,7 @@ class DBUser:
     @property
     def teacher_id(self) -> int | None:
         if self.user_type == 'student':
-            return DatabaseManager.get_student_teacher(self.id)
+            return TeacherStudentConnection(self.id).teacher_id
         return None
 
     def save_voice_channel_join(self, voice_channel_id: int):
@@ -153,6 +154,40 @@ class DBUser:
         DatabaseManager.transfer_hours_in_class_from_user_voice_channel_join(self.id)
 
 
+class TeacherStudentConnection:
+    def __init__(self, student_id: int):
+        self.student_id = student_id
+        self.load()
+
+    def load(self):
+        if ts_con := DatabaseManager._execute('SELECT * FROM teacher_student WHERE student_id = ?', self.student_id).fetchone():
+            (
+                self.teacher_id,
+                _,
+                self.channel_id
+            ) = ts_con
+        else:
+            self.teacher_id = None
+            self.channel_id = None
+
+    def save(self):
+        DatabaseManager._execute('''
+            INSERT INTO teacher_student (teacher_id, student_id, channel_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT (student_id) DO UPDATE SET
+            teacher_id = excluded.teacher_id,
+            channel_id = excluded.channel_id
+        ''', self.teacher_id, self.student_id, self.channel_id)
+
+    def edit(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        self.save()
+
+    def remove(self):
+        DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', self.student_id)
+
+
 match __name__:
     case 'Utils.database':
         DatabaseManager._create_tables()
@@ -164,6 +199,7 @@ match __name__:
         student.edit(user_type='student', icon='🎒', real_name='Ben Werner (TEST)')
         teacher = DBUser(4242424242)
         teacher.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
-        DatabaseManager.add_student_teacher(student.id, teacher.id)
+        ts_con = TeacherStudentConnection(student.id)
+        ts_con.edit(teacher_id=teacher.id, channel_id=33333333)
 
         print(student.__dict__, teacher.__dict__, sep='\n', end='\n\n')

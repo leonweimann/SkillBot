@@ -4,6 +4,8 @@ from discord.ext import commands
 
 import Coordination.student as student
 
+from Utils.database import TeacherStudentConnection
+import Utils.environment as env
 from Utils.errors import CodeError, UsageError
 from Utils.logging import log
 from Utils.msg import *
@@ -22,7 +24,7 @@ class StudentCog(commands.Cog):
         description="Registriert einen neuen Schüler."
     )
     @app_commands.checks.has_role('Lehrer')
-    async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str, silent: bool = False):
+    async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str, silent: bool = False):  # member should be discord.User, because some students doesn't accept guidelines timely, so then discord.Member makes issues...
         await student.assign_student(interaction, member, student_name, silent)
         await safe_respond(interaction, success_msg(f"Schüler {member.mention} registriert"))
 
@@ -68,6 +70,69 @@ class StudentCog(commands.Cog):
     @pop_student.error
     async def pop_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         await self.__handle_app_command_error(interaction, error, 'pop-student')
+
+    @app_commands.command(
+        name='connect-student',
+        description='Verbindet einen weiteren Account mit einem Schüler'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def connect_student(self, interaction: discord.Interaction, member: discord.Member, other_account: discord.Member):
+        if not interaction.guild:
+            raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+        if env.is_student(other_account):
+            raise UsageError(f"{other_account.mention} ist ein registrierter Schüler und kann nicht mit f{member.mention} verbunden werden")
+
+        ts_con = TeacherStudentConnection(member.id)
+        if not ts_con.channel_id:
+            raise CodeError(f"Schüler {member.id} hat keine Lehrer-Schüler-Verbindung gefunden")
+
+        if ts_con.teacher_id != interaction.user.id:
+            raise UsageError("Du kannst nur deine eigenen Schüler verbinden")
+
+        student_channel = interaction.guild.get_channel(ts_con.channel_id)
+        if not student_channel:
+            raise CodeError(f"Channel für Schüler {member.id} nicht gefunden")
+
+        await student_channel.set_permissions(other_account, read_messages=True, send_messages=True)
+        await other_account.edit(nick=f'{member.nick} ({other_account.display_name})')
+        await other_account.add_roles(env.get_student_role(interaction.guild))
+
+        await safe_respond(interaction, success_msg(f"Account {other_account.mention} mit Schüler {member.mention} verbunden"))
+
+    @connect_student.error
+    async def connect_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self.__handle_app_command_error(interaction, error, 'connect-student')
+
+    @app_commands.command(
+        name='disconnect-student',
+        description='Trennt einen weiteren Account von einem Schüler'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def disconnect_student(self, interaction: discord.Interaction, member: discord.Member, other_account: discord.Member):
+        if not interaction.guild:
+            raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+        ts_con = TeacherStudentConnection(member.id)
+        if not ts_con.channel_id:
+            raise CodeError(f"Schüler {member.id} hat keine Lehrer-Schüler-Verbindung gefunden")
+
+        if ts_con.teacher_id != interaction.user.id:
+            raise UsageError("Du kannst nur deine eigenen Schüler trennen")
+
+        student_channel = interaction.guild.get_channel(ts_con.channel_id)
+        if not student_channel:
+            raise CodeError(f"Channel für Schüler {member.id} nicht gefunden")
+
+        await student_channel.set_permissions(other_account, overwrite=None)
+        await other_account.edit(nick=None)
+        await other_account.remove_roles(env.get_student_role(interaction.guild))
+
+        await safe_respond(interaction, success_msg(f"Account {other_account.mention} von Schüler {member.mention} getrennt"))
+
+    @disconnect_student.error
+    async def disconnect_student_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await self.__handle_app_command_error(interaction, error, 'disconnect-student')
 
     async def __handle_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError, command_name: str):
         msg = self.__create_app_command_error_msg(error)

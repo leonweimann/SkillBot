@@ -55,43 +55,43 @@ class SetupCog(commands.Cog):
 
         await safe_respond(interaction, msg, ephemeral=True)
 
-    @app_commands.command(
-        name='update-realname',
-        description="Aktualisiert den echten Namen des Benutzers."
-    )
-    async def update_realname(self, interaction: discord.Interaction, user: discord.Member, new_realname: str):
-        if interaction.guild is None:
-            raise UsageError("Dieser Befehl kann nur in einem Server verwendet werden.")
+    # @app_commands.command(
+    #     name='update-realname',
+    #     description="Aktualisiert den echten Namen des Benutzers."
+    # )
+    # async def update_realname(self, interaction: discord.Interaction, user: discord.Member, new_realname: str):
+    #     if interaction.guild is None:
+    #         raise UsageError("Dieser Befehl kann nur in einem Server verwendet werden.")
 
-        if interaction.user.id != user.id:
-            if not isinstance(interaction.user, discord.Member):
-                raise CodeError("Der Benutzer ist kein Mitglied des Servers.")
+    #     if interaction.user.id != user.id:
+    #         if not isinstance(interaction.user, discord.Member):
+    #             raise CodeError("Der Benutzer ist kein Mitglied des Servers.")
 
-            admin_role = discord.utils.get(interaction.guild.roles, name='Admin')
-            if admin_role is None:
-                raise CodeError("Die Rolle 'Admin' existiert nicht.")
-            teacher_role = env.get_teacher_role(interaction.guild)
+    #         admin_role = discord.utils.get(interaction.guild.roles, name='Admin')
+    #         if admin_role is None:
+    #             raise CodeError("Die Rolle 'Admin' existiert nicht.")
+    #         teacher_role = env.get_teacher_role(interaction.guild)
 
-            if admin_role not in interaction.user.roles and teacher_role not in interaction.user.roles:
-                raise app_commands.MissingRole('Du musst Admin oder Lehrer sein, um den echten Namen eines anderen Benutzers zu aktualisieren.')
+    #         if admin_role not in interaction.user.roles and teacher_role not in interaction.user.roles:
+    #             raise app_commands.MissingRole('Du musst Admin oder Lehrer sein, um den echten Namen eines anderen Benutzers zu aktualisieren.')
 
-        # Update channel if student
-        student_role = env.get_student_role(interaction.guild)
-        if student_role in user.roles:
-            # Update channel name
-            old_name = user.nick
-            if old_name is not None:
-                student_channel = discord.utils.get(interaction.guild.text_channels, name=generate_student_channel_name(old_name))
-                if student_channel is not None:
-                    await student_channel.edit(name=generate_student_channel_name(new_realname))
+    #     # Update channel if student
+    #     student_role = env.get_student_role(interaction.guild)
+    #     if student_role in user.roles:
+    #         # Update channel name
+    #         old_name = user.nick
+    #         if old_name is not None:
+    #             student_channel = discord.utils.get(interaction.guild.text_channels, name=generate_student_channel_name(old_name))
+    #             if student_channel is not None:
+    #                 await student_channel.edit(name=generate_student_channel_name(new_realname))
 
-        # Update realname
-        await user.edit(nick=get_student_nick(new_realname))
+    #     # Update realname
+    #     await user.edit(nick=get_student_nick(new_realname))
 
-        db_user = DBUser(user.id)
-        db_user.edit(real_name=new_realname)
+    #     db_user = DBUser(user.id)
+    #     db_user.edit(real_name=new_realname)
 
-        await interaction.response.send_message(success_msg(f"Der echte Name von {user.mention} wurde erfolgreich zu '{new_realname}' aktualisiert."))
+    #     await interaction.response.send_message(success_msg(f"Der echte Name von {user.mention} wurde erfolgreich zu '{new_realname}' aktualisiert."))
 
 
 async def setup(bot):
