@@ -55,18 +55,6 @@ class DatabaseManager:
     def remove_user(user_id: int):
         DatabaseManager._execute('DELETE FROM users WHERE id = ?', user_id)
 
-    # @staticmethod
-    # def add_student_teacher(student_id: int, teacher_id: int):
-    #     DatabaseManager._execute('INSERT OR IGNORE INTO teacher_student (teacher_id, student_id) VALUES (?, ?)', teacher_id, student_id)
-
-    # @staticmethod
-    # def remove_student_teacher(student_id: int):
-    #     DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', student_id)
-
-    # @staticmethod
-    # def get_student_teacher(student_id: int) -> int:  # Returns teacher_id
-    #     return DatabaseManager._execute('SELECT teacher_id FROM teacher_student WHERE student_id = ?', student_id).fetchone()[0]
-
     @staticmethod
     def add_user_voice_channel_join(user_id: int, voice_channel_id: int):
         DatabaseManager._execute('INSERT INTO user_voice_channel_join (user_id, voice_channel_id, join_time) VALUES (?, ?, CURRENT_TIMESTAMP)', user_id, voice_channel_id)

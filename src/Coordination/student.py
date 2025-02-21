@@ -51,6 +51,7 @@ def assign_student_database(teacher_id: int, student_id: int, channel_id: int, r
     # Create user in db
     db_user = DBUser(student_id)
     db_user.edit(real_name=real_name, icon='🎒', user_type='student')
+
     # Create teacher-student connection in db
     ts_con = TeacherStudentConnection(student_id)
     ts_con.edit(teacher_id=teacher_id, channel_id=channel_id)
@@ -75,7 +76,7 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
         raise CodeError(f"Schüler {student.id} hat keinen echten Namen")
 
     ts_con = TeacherStudentConnection(student.id)
-    if not ts_con.channel_id:  # log if not found?
+    if not ts_con.channel_id:  # TODO: log if not found?
         raise CodeError(f"Student {student.id} has no teacher-student connection")
 
     if ts_con.teacher_id != teacher.id:
@@ -95,6 +96,7 @@ def unassign_student_database(student_id: int):
     # Reset user to default member in db
     db_user = DBUser(student_id)
     db_user.edit(icon=None, user_type=None)
+
     # Remove teacher-student connection in db
     TeacherStudentConnection(student_id).remove()
 
@@ -112,17 +114,10 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
     elif teacher_id != interaction.user.id:
         raise UsageError(f"{student.mention} ist nicht dein Schüler")
 
-    # student_name = DBUser(student.id).real_name
-    # if student_name is None:
-    #     raise CodeError(f"Student {student.id} has no real name")
-    # student_channel = get_channel_by_name(interaction.guild, generate_student_channel_name(student_name))
-
-    # NEW Code
     student_channel_id = TeacherStudentConnection(student.id).channel_id
     student_channel = discord.utils.get(interaction.guild.text_channels, id=student_channel_id)
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
-    # NEW Code
 
     archive_channel = env.get_archive_channel(interaction.guild)
     if student_channel.category == archive_channel:
@@ -144,17 +139,10 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     elif teacher_id != interaction.user.id:
         raise UsageError(f"{student.mention} ist nicht dein Schüler")
 
-    # student_name = DBUser(student.id).real_name
-    # if student_name is None:
-    #     raise CodeError(f"Student {student.id} has no real name")
-    # student_channel = get_channel_by_name(interaction.guild, generate_student_channel_name(student_name))
-
-    # NEW Code
     student_channel_id = TeacherStudentConnection(student.id).channel_id
     student_channel = discord.utils.get(interaction.guild.text_channels, id=student_channel_id)
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
-    # NEW Code
 
     archive_channel = env.get_archive_channel(interaction.guild)
     if student_channel.category != archive_channel:
