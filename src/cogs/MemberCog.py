@@ -6,7 +6,6 @@ from Utils.database import *
 import Utils.environment as env
 from Utils.errors import *
 from Utils.logging import log
-from Utils.msg import *
 
 
 class MemberCog(commands.Cog):
@@ -71,20 +70,20 @@ class MemberCog(commands.Cog):
         else:
             raise UsageError("Du darfst diesen Nutzer nicht umbenennen")
 
-        await interaction.response.send_message(success_msg(f"{member.mention} von `{old_name}` zu `{real_name}` umbenannt"))
+        await interaction.response.send_message(env.success_response(f"{member.mention} von `{old_name}` zu `{real_name}` umbenannt"))
 
     @rename_member.error
     async def rename_member_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         match error:
             case UsageError():
-                await interaction.response.send_message(error_msg(str(error)))
+                await interaction.response.send_message(env.failure_response(str(error)))
             case CodeError():
-                await interaction.response.send_message(error_msg('Ein interner Fehler ist aufgetreten', error))
+                await interaction.response.send_message(env.failure_response('Ein interner Fehler ist aufgetreten', error))
             case _:
                 if interaction.guild:
                     await log(interaction.guild, 'Unbekannter Fehler in /rename-member', details={'Command': 'rename_member', 'Used by': f'{interaction.user.mention}', 'Error': str(error)})
 
-                await interaction.response.send_message(error_msg('Ein unbekannter Fehler ist aufgetreten', error))
+                await interaction.response.send_message(env.failure_response('Ein unbekannter Fehler ist aufgetreten', error))
 
 
 async def setup(bot):

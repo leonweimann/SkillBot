@@ -1,69 +1,74 @@
 import discord
 
-from Utils.channels import get_category_by_name
 from Utils.database import DBUser
-from Utils.errors import CodeError, UsageError
-from Utils.members import get_teacher_nick
-from Utils.roles import get_teacher_role
+import Utils.environment as env
+from Utils.errors import *
 
+
+# region Assignments
 
 async def assign_teacher(interaction: discord.Interaction, teacher: discord.Member, name: str):
     if interaction.guild is None:
-        raise CodeError("Guild is None")
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
-    teacher_role = get_teacher_role(interaction.guild)
-
-    if teacher_role in teacher.roles:
+    if env.is_teacher(teacher):
         raise UsageError(f"{teacher.mention} ist bereits ein Lehrer")
 
-    teacher_nick = get_teacher_nick(name)
+    # Begin teacher assignment
 
-    await teacher.add_roles(teacher_role)
-    await teacher.edit(nick=teacher_nick)
+    # Setup teacher in db
+    db_teacher = DBUser(teacher.id)
+    db_teacher.edit(real_name=name, icon='🎓', user_type='teacher')
 
-    overwrites = {
-        interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        teacher: discord.PermissionOverwrite(read_messages=True)
-    }
+    # Configure teachers category
+    teacher_category_name = env.generate_member_nick(db_teacher)
+    teacher_category = env.__unwrapped_get(interaction.guild.categories, teacher_category_name)  # Search for teacher category, because maybe there exists one already
+    if not teacher_category:
+        # Create new teacher category
+        overwrites = {
+            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            teacher: discord.PermissionOverwrite(read_messages=True)
+        }
 
-    new_teacher_category = await interaction.guild.create_category(teacher_nick, overwrites=overwrites)
-    new_teacher_cmd_channel = await interaction.guild.create_text_channel('cmd', category=new_teacher_category, overwrites=overwrites)
+        teacher_category = await interaction.guild.create_category(teacher_category_name, overwrites=overwrites)
 
-    assign_teacher_database(teacher.id, name)
+    # Create cmd channel for the teacher
+    cmd_channel = await interaction.guild.create_text_channel('cmd', category=teacher_category, overwrites=overwrites)
 
-    await new_teacher_cmd_channel.send(f"👋 Willkommen, {teacher.mention}! Hier kannst du ungestört Befehle ausführen.")
+    # Apply teacher role and nickname
+    await teacher.add_roles(env.get_teacher_role(interaction.guild))
+    await teacher.edit(nick=env.generate_member_nick(db_teacher))
 
-
-def assign_teacher_database(teacher_id: int, real_name: str):
-    db_user = DBUser(teacher_id)
-    db_user.edit(real_name=real_name, icon='🎓', user_type='teacher')
+    await cmd_channel.send(f'👋 Willkommen, {teacher.mention}! Hier kannst du ungestört Befehle ausführen.')
 
 
 async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Member):
-    if interaction.guild is None:
-        raise CodeError('Guild is None')
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
-    teacher_role = get_teacher_role(interaction.guild)
-
-    if teacher_role not in teacher.roles:
+    if not env.is_teacher(teacher):
         raise UsageError(f"{teacher.mention} ist kein Lehrer")
 
-    # Ensure that teacher has no current students
-    teacher_category = get_category_by_name(interaction.guild, teacher.display_name)
-    for channel in teacher_category.text_channels:
-        if channel.name != 'cmd':
-            raise UsageError(f"{teacher.mention} hat noch registrierte Schüler")
+    # Begin teacher unassignment
 
-    await teacher.remove_roles(teacher_role)
+    db_teacher = DBUser(teacher.id)
+
+    # Ensure that teacher has no current students
+    teacher_category_name = env.generate_member_nick(db_teacher)
+    teacher_category = env.__unwrapped_get(interaction.guild.categories, teacher_category_name)
+    if [channel.name for channel in teacher_category.text_channels if channel.name != 'cmd'] != []:
+        raise UsageError(f"{teacher.mention} hat noch registrierte Schüler")
+
+    # Reset teacher in db
+    db_teacher.edit(icon=None, user_type=None)
+
+    # Remove teacher role and nickname
+    await teacher.remove_roles(env.get_teacher_role(interaction.guild))
     await teacher.edit(nick=None)
 
+    # Delete channels and category
     for channel in teacher_category.text_channels:
         await channel.delete()
     await teacher_category.delete()
 
-    unassign_teacher_database(teacher.id)
-
-
-def unassign_teacher_database(teacher_id: int):
-    db_user = DBUser(teacher_id)
-    db_user.edit(icon=None, user_type=None)
+# endregion

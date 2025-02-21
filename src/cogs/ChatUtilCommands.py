@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import Utils.environment as env
 from Utils.logging import log
-from Utils.msg import *
 
 
 class ChatUtilCommands(commands.Cog):
@@ -24,17 +24,17 @@ class ChatUtilCommands(commands.Cog):
             case discord.TextChannel():
                 await interaction.response.defer(ephemeral=True)
                 deleted_messages = await interaction.channel.purge()
-                await interaction.followup.send(success_msg(f"{len(deleted_messages)} Nachrichten gelöscht."), ephemeral=True)
+                await interaction.followup.send(env.success_response(f"{len(deleted_messages)} Nachrichten gelöscht."), ephemeral=True)
             case _:
-                await interaction.response.send_message(error_msg('Dieser Befehl kann nur in Textkanälen verwendet werden.'), ephemeral=True)
+                await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in Textkanälen verwendet werden.'), ephemeral=True)
 
     @clear.error
     async def clear_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         match error:
             case app_commands.MissingRole():
-                await interaction.response.send_message(error_msg("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen."), ephemeral=True)
+                await interaction.response.send_message(env.failure_response("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen."), ephemeral=True)
             case _:
-                msg = error_msg("Ein unbekannter Fehler ist aufgetreten.", error)
+                msg = env.failure_response("Ein unbekannter Fehler ist aufgetreten.", error)
 
                 if interaction.guild:
                     await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})

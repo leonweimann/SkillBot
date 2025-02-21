@@ -2,10 +2,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Utils.errors import CodeError, UsageError
+import Coordination.setup as stp
+
+import Utils.environment as env
+from Utils.errors import *
 from Utils.logging import log
-from Utils.msg import error_msg, success_msg, safe_respond
-from Coordination.setup import setup_server as _setup_server
+# from Utils.msg import safe_respond
 
 
 class SetupCog(commands.Cog):
@@ -32,24 +34,24 @@ class SetupCog(commands.Cog):
 
         await interaction.response.defer()
 
-        await _setup_server(interaction.guild)
+        await stp.setup_server(interaction.guild)
 
-        await interaction.followup.send(success_msg("Der Server wurde erfolgreich für die Nutzung des Bots konfiguriert."))
+        await interaction.followup.send(env.success_response("Der Server wurde erfolgreich für die Nutzung des Bots konfiguriert."))
 
     @setup_server.error
     async def setup_server_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         match error:
             case app_commands.MissingRole():
-                msg = error_msg("Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.")
+                msg = env.failure_response("Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.")
             case UsageError():
-                msg = error_msg(str(error))
+                msg = env.failure_response(str(error))
             case _:
-                msg = error_msg("Ein unbekannter Fehler ist aufgetreten.", error)
+                msg = env.failure_response("Ein unbekannter Fehler ist aufgetreten.", error)
 
         if interaction.guild and not isinstance(error, UsageError):
             await log(interaction.guild, msg)
 
-        await safe_respond(interaction, msg, ephemeral=True)
+        await env.send_safe_response(interaction, msg, ephemeral=True)
 
 
 async def setup(bot):

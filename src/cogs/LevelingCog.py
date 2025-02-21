@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from Utils.database import *
+import Utils.environment as env
 from Utils.logging import log
-from Utils.msg import error_msg
 
 
 class LevelingCog(commands.Cog):
@@ -40,14 +40,14 @@ class LevelingCog(commands.Cog):
         Command that allows users to check the total time spent in the voice channel 'klassenzimmer'.
         """
         if interaction.guild is None:
-            await interaction.response.send_message(error_msg('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
             return
 
         if not user:
             if isinstance(interaction.user, discord.Member):
                 user = interaction.user
             else:
-                msg = error_msg('Ein Fehler beim Finden des Richtigen Nutzers ist aufgekommen.')
+                msg = env.failure_response('Ein Fehler beim Finden des Richtigen Nutzers ist aufgekommen.')
                 await log(interaction.guild, msg, {'Used by': f'{interaction.user.mention}'})
                 await interaction.response.send_message(msg, ephemeral=True)
                 return
@@ -65,7 +65,7 @@ class LevelingCog(commands.Cog):
         Command that allows users to set the total time spent in the voice channel 'klassenzimmer'.
         """
         if interaction.guild is None:
-            await interaction.response.send_message(error_msg('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
             return
 
         db_user = DBUser(user.id)
@@ -75,9 +75,9 @@ class LevelingCog(commands.Cog):
     @set_hours.error
     async def set_hours_error(self, interaction, error):
         if isinstance(error, commands.MissingRole):
-            await interaction.response.send_message(error_msg('Du hast nicht die Berechtigung, diesen Befehl auszuführen.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Du hast nicht die Berechtigung, diesen Befehl auszuführen.'), ephemeral=True)
         else:
-            msg = error_msg('Ein Fehler ist aufgetreten.', error)
+            msg = env.failure_response('Ein Fehler ist aufgetreten.', error)
             await log(interaction.guild, msg, {'Used by': f'{interaction.user.mention}'})
             await interaction.response.send_message(msg, ephemeral=True)
 

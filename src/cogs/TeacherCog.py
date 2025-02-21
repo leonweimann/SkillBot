@@ -2,11 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Coordination.teacher import assign_teacher as _assign_teacher, unassign_teacher as _unassign_teacher
+import Coordination.teacher as teacher
 
+import Utils.environment as env
 from Utils.errors import *
 from Utils.logging import log
-from Utils.msg import *
 
 
 class TeacherCog(commands.Cog):
@@ -18,13 +18,13 @@ class TeacherCog(commands.Cog):
         print(f'[COG] {self.__cog_name__} is ready')
 
     @app_commands.command(
-        name='assign_teacher',
+        name='assign-teacher',
         description="Registriert einen neuen Lehrer."
     )
     @app_commands.checks.has_role('Admin')
     async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
-        await _assign_teacher(interaction, member, teacher_name)
-        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} registriert"))
+        await teacher.assign_teacher(interaction, member, teacher_name)
+        await env.send_safe_response(interaction, env.success_response(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -33,16 +33,16 @@ class TeacherCog(commands.Cog):
         if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
             await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
 
-        await safe_respond(interaction, msg, ephemeral=True)
+        await env.send_safe_response(interaction, msg, ephemeral=True)
 
     @app_commands.command(
-        name='unassign_teacher',
+        name='unassign-teacher',
         description="Entfernt einen registrierten Lehrer."
     )
     @app_commands.checks.has_role('Admin')
     async def unassign_teacher(self, interaction: discord.Interaction, member: discord.Member):
-        await _unassign_teacher(interaction, member)
-        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} abgemeldet"))
+        await teacher.unassign_teacher(interaction, member)
+        await env.send_safe_response(interaction, env.success_response(f"Lehrer {member.mention} abgemeldet"))
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -51,18 +51,18 @@ class TeacherCog(commands.Cog):
         if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
             await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
 
-        await safe_respond(interaction, msg, ephemeral=True)
+        await env.send_safe_response(interaction, msg, ephemeral=True)
 
     def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
         match error:
             case app_commands.MissingRole():
-                return error_msg("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen.")
+                return env.failure_response("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen.")
             case CodeError():
-                return error_msg("Ein interner Fehler ist aufgetreten.", error=error)
+                return env.failure_response("Ein interner Fehler ist aufgetreten.", error=error)
             case UsageError():
-                return error_msg(str(error))
+                return env.failure_response(str(error))
             case _:
-                return error_msg("Ein unbekannter Fehler ist aufgetreten.", error=error)
+                return env.failure_response("Ein unbekannter Fehler ist aufgetreten.", error=error)
 
 
 async def setup(bot):

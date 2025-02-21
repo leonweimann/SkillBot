@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 import os
 import asyncio
 
-from Utils.database import *  # Creates tables if required
+from Utils.database import DatabaseManager
+
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
@@ -42,6 +43,9 @@ def get_discord_token() -> str:
 async def main():
     async with bot:
         await bot.start(get_discord_token())
+
+
+DatabaseManager.create_tables()
 
 
 asyncio.run(main())
