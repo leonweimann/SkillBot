@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 
 from Utils.database import *
+import Utils.environment as env
 from Utils.logging import log
 
 
@@ -40,6 +41,14 @@ class Greetings(commands.Cog):
     async def on_member_remove(self, member: discord.Member):
         try:
             db_user = DBUser(member.id)
+
+            if env.is_student(member):  # Delete student channel
+                ts_con = TeacherStudentConnection(member.id)
+                if ts_con.channel_id:
+                    student_channel = member.guild.get_channel(ts_con.channel_id)
+                    if student_channel:
+                        await student_channel.delete()
+
             DatabaseManager.remove_user(member.id)
 
             await log(
