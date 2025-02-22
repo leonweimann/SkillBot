@@ -1,6 +1,6 @@
 import discord
 
-import environment as env
+import Utils.environment as env
 
 
 async def log(guild: discord.Guild, message: str, details: dict[str, str] = {}):
