@@ -3,10 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import Coordination.teacher as teacher
-
 import Utils.environment as env
-from Utils.errors import *
-from Utils.logging import log
 
 
 class TeacherCog(commands.Cog):
@@ -16,6 +13,8 @@ class TeacherCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'[COG] {self.__cog_name__} is ready')
+
+    # region Assignments
 
     @app_commands.command(
         name='assign-teacher',
@@ -28,12 +27,7 @@ class TeacherCog(commands.Cog):
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = self.__create_app_command_error_msg(error)
-
-        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
-        await env.send_safe_response(interaction, msg, ephemeral=True)
+        await env.handle_app_command_error(interaction, error, 'assign_teacher', 'Admin')
 
     @app_commands.command(
         name='unassign-teacher',
@@ -46,23 +40,9 @@ class TeacherCog(commands.Cog):
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = self.__create_app_command_error_msg(error)
+        await env.handle_app_command_error(interaction, error, 'unassign_teacher', 'Admin')
 
-        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
-        await env.send_safe_response(interaction, msg, ephemeral=True)
-
-    def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
-        match error:
-            case app_commands.MissingRole():
-                return env.failure_response("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen.")
-            case CodeError():
-                return env.failure_response("Ein interner Fehler ist aufgetreten.", error=error)
-            case UsageError():
-                return env.failure_response(str(error))
-            case _:
-                return env.failure_response("Ein unbekannter Fehler ist aufgetreten.", error=error)
+    # endregion
 
 
 async def setup(bot):
