@@ -3,7 +3,8 @@ from typing import Iterable
 import discord
 
 from Utils.database import DBUser
-from Utils.errors import CodeError
+from Utils.errors import *
+from Utils.logging import log
 
 
 # region Helpers
@@ -27,6 +28,36 @@ async def send_safe_response(interaction: discord.Interaction, content: str, eph
         await interaction.followup.send(content, ephemeral=ephemeral)
     else:
         await interaction.response.send_message(content, ephemeral=ephemeral)
+
+
+async def handle_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError, command_name: str, reqired_role: str = ''):
+    """
+    Handles errors that occur during the execution of an application command.
+
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        error (discord.app_commands.AppCommandError): The error that occurred.
+        command_name (str): The name of the command that was executed.
+        reqired_role (str, optional): The role required to execute the command. Defaults to ''.
+
+    This function creates an appropriate error message based on the type of error that occurred and sends it as a response to the user. If the error is not a UsageError or MissingRole, it also logs the error details in the guild's log.
+    """
+    def create_app_command_error_msg(error: discord.app_commands.AppCommandError, required_role: str) -> str:
+        match error:
+            case discord.app_commands.MissingRole():
+                return failure_response(f"Du musst die Rolle '{required_role}' haben, um diesen Befehl zu benutzen.")
+            case CodeError():
+                return failure_response("Ein interner Fehler ist aufgetreten.", error=error)
+            case UsageError():
+                return failure_response(str(error))
+            case _:
+                return failure_response("Ein unbekannter Fehler ist aufgetreten.", error=error)
+
+    msg = create_app_command_error_msg(error, reqired_role)
+    if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
+        await log(interaction.guild, msg, details={'Command': command_name, 'Used by': f'{interaction.user.mention}'})
+    await send_safe_response(interaction, msg, ephemeral=True)
+
 
 # endregion
 
@@ -204,7 +235,7 @@ def success_response(msg: str) -> str:
     return f'✅ {msg}'
 
 
-def failure_response(msg: str, error=None) -> str:
+def failure_response(msg: str, error=None) -> str:  # TODO: Automated error logging, especially for CodeError
     """
     Generates a failure response message.
 
