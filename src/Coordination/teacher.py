@@ -99,3 +99,5 @@ async def sort_channels(channel: discord.abc.GuildChannel):
         else:
             for i, c in enumerate(other_channels):
                 await c.edit(position=i)
+
+# endregion
