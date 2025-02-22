@@ -10,7 +10,7 @@ class DatabaseManager:
         return sqlite3.connect(DB_PATH)
 
     @staticmethod
-    def _create_tables():
+    def create_tables():
         with DatabaseManager._connect() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -87,6 +87,40 @@ class DatabaseManager:
             conn.commit()
 
 
+class TeacherStudentConnection:
+    def __init__(self, student_id: int):
+        self.student_id = student_id
+        self.load()
+
+    def load(self):
+        if ts_con := DatabaseManager._execute('SELECT * FROM teacher_student WHERE student_id = ?', self.student_id).fetchone():
+            (
+                self.teacher_id,
+                _,
+                self.channel_id
+            ) = ts_con
+        else:
+            self.teacher_id = None
+            self.channel_id = None
+
+    def save(self):
+        DatabaseManager._execute('''
+            INSERT INTO teacher_student (teacher_id, student_id, channel_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT (student_id) DO UPDATE SET
+            teacher_id = excluded.teacher_id,
+            channel_id = excluded.channel_id
+        ''', self.teacher_id, self.student_id, self.channel_id)
+
+    def edit(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        self.save()
+
+    def remove(self):
+        DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', self.student_id)
+
+
 class DBUser:
     def __init__(self, discord_id: int):
         self.id = discord_id
@@ -124,10 +158,9 @@ class DBUser:
         self.save()
 
     @property
-    def teacher_id(self) -> int | None:
+    def teacher_student_connection(self) -> TeacherStudentConnection | None:
         if self.user_type == 'student':
-            return TeacherStudentConnection(self.id).teacher_id
-        return None
+            return TeacherStudentConnection(self.id)
 
     def save_voice_channel_join(self, voice_channel_id: int):
         DatabaseManager.add_user_voice_channel_join(self.id, voice_channel_id)
@@ -142,52 +175,18 @@ class DBUser:
         DatabaseManager.transfer_hours_in_class_from_user_voice_channel_join(self.id)
 
 
-class TeacherStudentConnection:
-    def __init__(self, student_id: int):
-        self.student_id = student_id
-        self.load()
+# region Testing
 
-    def load(self):
-        if ts_con := DatabaseManager._execute('SELECT * FROM teacher_student WHERE student_id = ?', self.student_id).fetchone():
-            (
-                self.teacher_id,
-                _,
-                self.channel_id
-            ) = ts_con
-        else:
-            self.teacher_id = None
-            self.channel_id = None
+# if __name__ == '__main__':
+#     DatabaseManager.create_tables()
 
-    def save(self):
-        DatabaseManager._execute('''
-            INSERT INTO teacher_student (teacher_id, student_id, channel_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT (student_id) DO UPDATE SET
-            teacher_id = excluded.teacher_id,
-            channel_id = excluded.channel_id
-        ''', self.teacher_id, self.student_id, self.channel_id)
+#     student = DBUser(2424242424)
+#     student.edit(user_type='student', icon='🎒', real_name='Ben Werner (TEST)')
+#     teacher = DBUser(4242424242)
+#     teacher.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
+#     ts_con = TeacherStudentConnection(student.id)
+#     ts_con.edit(teacher_id=teacher.id, channel_id=33333333)
 
-    def edit(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-        self.save()
+#     print(student.__dict__, teacher.__dict__, sep='\n', end='\n\n')
 
-    def remove(self):
-        DatabaseManager._execute('DELETE FROM teacher_student WHERE student_id = ?', self.student_id)
-
-
-match __name__:
-    case 'Utils.database':
-        DatabaseManager._create_tables()
-
-    case '__main__':
-        DatabaseManager._create_tables()
-
-        student = DBUser(2424242424)
-        student.edit(user_type='student', icon='🎒', real_name='Ben Werner (TEST)')
-        teacher = DBUser(4242424242)
-        teacher.edit(user_type='teacher', icon='🎓', real_name='Leon Weimann (TEST)')
-        ts_con = TeacherStudentConnection(student.id)
-        ts_con.edit(teacher_id=teacher.id, channel_id=33333333)
-
-        print(student.__dict__, teacher.__dict__, sep='\n', end='\n\n')
+# endregion

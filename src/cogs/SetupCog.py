@@ -2,10 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Utils.errors import CodeError, UsageError
-from Utils.logging import log
-from Utils.msg import error_msg, success_msg, safe_respond
-from Coordination.setup import setup_server as _setup_server
+import Coordination.setup as stp
+import Utils.environment as env
+
+from Utils.errors import UsageError
 
 
 class SetupCog(commands.Cog):
@@ -15,6 +15,8 @@ class SetupCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f"[COG] {self.__cog_name__} is ready")
+
+    # region Setup
 
     @app_commands.command(
         name="setup-server",
@@ -28,28 +30,17 @@ class SetupCog(commands.Cog):
             raise UsageError("Der Server hat keinen Besitzer.")
 
         if interaction.guild.owner_id != interaction.user.id:
-            raise app_commands.MissingRole('Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.')
+            raise UsageError('Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.')
 
         await interaction.response.defer()
-
-        await _setup_server(interaction.guild)
-
-        await interaction.followup.send(success_msg("Der Server wurde erfolgreich für die Nutzung des Bots konfiguriert."))
+        await stp.setup_server(interaction.guild)
+        await interaction.followup.send(env.success_response("Der Server wurde erfolgreich für die Nutzung des Bots konfiguriert."))
 
     @setup_server.error
     async def setup_server_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        match error:
-            case app_commands.MissingRole():
-                msg = error_msg("Du musst der Server-Besitzer sein, um den Server zu als Nachhilfe Server zu initialisieren.")
-            case UsageError():
-                msg = error_msg(str(error))
-            case _:
-                msg = error_msg("Ein unbekannter Fehler ist aufgetreten.", error)
+        await env.handle_app_command_error(interaction, error, 'setup_server', 'Server-Besitzer')
 
-        if interaction.guild and not isinstance(error, UsageError):
-            await log(interaction.guild, msg)
-
-        await safe_respond(interaction, msg, ephemeral=True)
+    # endregion
 
 
 async def setup(bot):
