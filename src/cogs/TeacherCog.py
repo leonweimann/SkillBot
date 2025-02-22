@@ -44,6 +44,19 @@ class TeacherCog(commands.Cog):
 
     # endregion
 
+    # reagion Sort Channels
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        await teacher.sort_channels(channel)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+        if before.name != after.name or before.category != after.category:  # Without this sorting would be infinite
+            await teacher.sort_channels(after)
+
+    # endregion
+
 
 async def setup(bot):
     await bot.add_cog(TeacherCog(bot))
