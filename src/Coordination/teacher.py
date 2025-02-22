@@ -72,3 +72,32 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
     await teacher_category.delete()
 
 # endregion
+
+
+# region Sort Channels
+
+async def sort_channels(channel: discord.abc.GuildChannel):
+    """
+    Sorts the channels within a category that has '🎓' in its name. The 'cmd' channel stays the first one.
+
+    This function checks if the given channel is part of a category with '🎓' in its name.
+    If so, it sorts all channels in that category alphabetically by their names and updates their positions accordingly,
+    keeping the 'cmd' channel at the top.
+
+    Args:
+        channel (discord.abc.GuildChannel): The channel to check and sort within its category.
+    """
+    if channel.category and '🎓' in channel.category.name:  # only sort channels in a teacher category
+        channels = channel.category.channels
+        cmd_channel = next((c for c in channels if c.name == 'cmd'), None)
+        other_channels = sorted((c for c in channels if c.name != 'cmd'), key=lambda c: c.name)
+
+        if cmd_channel:
+            await cmd_channel.edit(position=0)
+            for i, c in enumerate(other_channels, start=1):
+                await c.edit(position=i)
+        else:
+            for i, c in enumerate(other_channels):
+                await c.edit(position=i)
+
+# endregion

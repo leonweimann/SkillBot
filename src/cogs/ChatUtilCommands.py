@@ -3,7 +3,6 @@ from discord import app_commands
 from discord.ext import commands
 
 import Utils.environment as env
-from Utils.logging import log
 
 
 class ChatUtilCommands(commands.Cog):
@@ -13,6 +12,8 @@ class ChatUtilCommands(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'[COG] {self.__cog_name__} is ready')
+
+    # region Clear Command
 
     @app_commands.command(
         name='clear',
@@ -30,16 +31,9 @@ class ChatUtilCommands(commands.Cog):
 
     @clear.error
     async def clear_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        match error:
-            case app_commands.MissingRole():
-                await interaction.response.send_message(env.failure_response("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen."), ephemeral=True)
-            case _:
-                msg = env.failure_response("Ein unbekannter Fehler ist aufgetreten.", error)
+        await env.handle_app_command_error(interaction, error, 'clear', 'Admin')
 
-                if interaction.guild:
-                    await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
-                await interaction.response.send_message(msg, ephemeral=True)
+    # endregion
 
 
 async def setup(bot):
