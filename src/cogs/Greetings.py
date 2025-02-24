@@ -17,8 +17,8 @@ class Greetings(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         try:
-            db_user = DBUser(member.id)
-            db_user.edit(real_name=member.name, icon='👋', user_type=None)
+            db_user = User(member.id)
+            db_user.edit(real_name=member.name)
 
             await log(
                 member.guild, f'Added {member.mention if member.nick is None else member.nick} to database',
@@ -40,16 +40,16 @@ class Greetings(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         try:
-            db_user = DBUser(member.id)
+            db_user = User(member.id)
 
             if env.is_student(member):  # Delete student channel
-                ts_con = TeacherStudentConnection(member.id)
-                if ts_con.channel_id:
+                ts_con = TeacherStudentConnection.find_by_student(member.id)
+                if ts_con and ts_con.channel_id:
                     student_channel = member.guild.get_channel(ts_con.channel_id)
                     if student_channel:
                         await student_channel.delete()
 
-            DatabaseManager.remove_user(member.id)
+            db_user.delete()
 
             await log(
                 member.guild, f'Removed {member.mention if member.nick is None else member.nick} from database',
@@ -58,7 +58,7 @@ class Greetings(commands.Cog):
                     'ID': f'{member.id}',
                     'Real Name': f'{db_user.real_name}',
                     'Hours in class': f'{db_user.hours_in_class}',
-                    'User type': f'{db_user.user_type if db_user.user_type is not None else "None"}'
+                    'User type': f'{'Student' if env.is_student(member) else 'Teacher' if env.is_teacher(member) else 'Unknown'}'
                 }
             )
         except Exception as e:

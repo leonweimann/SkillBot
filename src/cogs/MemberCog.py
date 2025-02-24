@@ -30,7 +30,7 @@ class MemberCog(commands.Cog):
         if not isinstance(interaction.user, discord.Member):
             raise CodeError("Dieser Befehl kann nur von Mitgliedern verwendet werden")
 
-        db_member = DBUser(member.id)
+        db_member = User(member.id)
         old_name = str(db_member.real_name)
 
         if interaction.user.id == member.id and env.is_admin(member):
@@ -54,7 +54,10 @@ class MemberCog(commands.Cog):
         elif env.is_teacher(interaction.user) and env.is_student(member):
             # Teacher renames student
 
-            ts_con = TeacherStudentConnection(member.id)
+            ts_con = TeacherStudentConnection.find_by_student(member.id)
+            if not ts_con:
+                raise UsageError("Du kannst nur Schüler umbenennen, die du unterrichtest")
+
             if ts_con.teacher_id != interaction.user.id:
                 raise UsageError("Du kannst nur deine eigenen Schüler umbenennen")
 

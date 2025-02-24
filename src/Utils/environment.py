@@ -2,7 +2,7 @@ from typing import Iterable
 
 import discord
 
-from Utils.database import DBUser
+from Utils.database import *
 from Utils.errors import *
 from Utils.logging import log
 
@@ -205,17 +205,17 @@ def get_member(guild: discord.Guild, id: int) -> discord.Member:
     raise CodeError(f'Member with ID {id} not found')
 
 
-def generate_member_nick(db_member: DBUser) -> str:
+def generate_member_nick(db_member: User) -> str:
     """
     Generates a nickname for a member based on their real name and icon.
 
     Args:
-        db_member (DBUser): The database user object representing the member.
+        db_member (User): The database user object representing the member.
 
     Returns:
         str: The generated nickname
     """
-    return f'{db_member.icon} {db_member.real_name}'
+    return f'{'🎓' if db_member.is_teacher else '🎒' if db_member.is_student else '👋'} {db_member.real_name}'
 
 # endregion
 

@@ -1,13 +1,13 @@
 import discord
 
-from Utils.database import DBUser
+from Utils.database import *
 import Utils.environment as env
 from Utils.errors import *
 
 
 # region Assignments
 
-async def assign_teacher(interaction: discord.Interaction, teacher: discord.Member, name: str):
+async def assign_teacher(interaction: discord.Interaction, teacher: discord.Member, real_name: str, subject: str | None = None, phonenumber: str | None = None, availability: str | None = None):
     if interaction.guild is None:
         raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
@@ -17,8 +17,8 @@ async def assign_teacher(interaction: discord.Interaction, teacher: discord.Memb
     # Begin teacher assignment
 
     # Setup teacher in db
-    db_teacher = DBUser(teacher.id)
-    db_teacher.edit(real_name=name, icon='🎓', user_type='teacher')
+    db_teacher = Teacher(teacher.id)
+    db_teacher.edit(real_name=real_name, subject=subject, phonenumber=phonenumber, availability=availability)
 
     # Configure teachers category
     teacher_category_name = env.generate_member_nick(db_teacher)
@@ -51,7 +51,7 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 
     # Begin teacher unassignment
 
-    db_teacher = DBUser(teacher.id)
+    db_teacher = Teacher(teacher.id)
 
     # Ensure that teacher has no current students
     teacher_category_name = env.generate_member_nick(db_teacher)
@@ -60,7 +60,7 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
         raise UsageError(f"{teacher.mention} hat noch registrierte Schüler")
 
     # Reset teacher in db
-    db_teacher.edit(icon=None, user_type=None)
+    db_teacher.pop()
 
     # Remove teacher role and nickname
     await teacher.remove_roles(env.get_teacher_role(interaction.guild))
