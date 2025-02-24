@@ -71,8 +71,6 @@ class DatabaseManager:
 class User:
     def __init__(self, user_id: int):
         self.id = user_id
-        self.real_name = None
-        self.hours_in_class = 0.0
         self.load()
 
     def load(self):
@@ -82,6 +80,8 @@ class User:
             user = cursor.fetchone()
             if user:
                 self.real_name, self.hours_in_class = user[1], user[2]
+            else:
+                self.real_name, self.hours_in_class = None, 0.0
 
     def save(self):
         with DatabaseManager._connect() as conn:
