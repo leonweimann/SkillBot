@@ -25,6 +25,14 @@ class DatabaseManager:
                 )
             ''')
             cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subusers (
+                    user_id INTEGER NOT NULL,
+                    subuser_id INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, subuser_id),
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            ''')
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS teachers (
                     user_id INTEGER PRIMARY KEY,
                     subjects TEXT,
@@ -119,6 +127,49 @@ class User:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM teachers WHERE user_id = ?', (self.id,))
             return cursor.fetchone() is not None
+
+# endregion
+
+
+# region Subuser
+
+class Subuser(User):
+    def __init__(self, user_id: int, subuser_id: int):
+        super().__init__(user_id)
+        self.subuser_id = subuser_id
+
+    def save(self):
+        with DatabaseManager._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO subusers (user_id, subuser_id)
+                VALUES (?, ?)
+                ON CONFLICT (user_id, subuser_id) DO NOTHING
+            ''', (self.id, self.subuser_id))
+            conn.commit()
+
+    def delete(self):
+        with DatabaseManager._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM subusers WHERE user_id = ? AND subuser_id = ?', (self.id, self.subuser_id))
+            conn.commit()
+
+    @staticmethod
+    def get_all_subusers(user_id: int) -> list['Subuser']:
+        with DatabaseManager._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subusers WHERE user_id = ?', (user_id,))
+            return [Subuser(user_id, row[1]) for row in cursor.fetchall()]
+
+    @staticmethod
+    def get_user_of_subuser(subuser_id: int) -> User | None:
+        with DatabaseManager._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subusers WHERE subuser_id = ?', (subuser_id,))
+            row = cursor.fetchone()
+            if row:
+                return User(row[0])
+            return None
 
 # endregion
 
