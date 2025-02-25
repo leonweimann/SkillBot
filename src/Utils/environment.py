@@ -24,10 +24,14 @@ async def send_safe_response(interaction: discord.Interaction, content: str, eph
         content (str): The content of the response.
         ephemeral (bool): Whether the response should be ephemeral (only visible to the user).
     """
-    if interaction.response.is_done():
-        await interaction.followup.send(content, ephemeral=ephemeral)
-    else:
+    try:
         await interaction.response.send_message(content, ephemeral=ephemeral)
+    except discord.errors.HTTPException as e:
+        # 40060 bedeutet "Interaction has already been acknowledged"
+        if e.code == 40060:
+            await interaction.followup.send(content, ephemeral=ephemeral)
+        else:
+            raise
 
 
 async def handle_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError, command_name: str, reqired_role: str = ''):
