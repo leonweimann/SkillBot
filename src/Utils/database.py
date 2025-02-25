@@ -8,7 +8,7 @@ from datetime import datetime
 
 class DatabaseManager:
     @staticmethod
-    def __get_db_path(guild_id: int) -> str:
+    def __get_db_path(guild_id: int) -> str:  # TODO: Cache this
         return os.path.join(os.path.dirname(__file__), f'../../data/skillbot_{guild_id}.db')
 
     @staticmethod
@@ -80,12 +80,12 @@ class DatabaseManager:
 
 class User:
     def __init__(self, guild_id: int, user_id: int):
-        self.__guild_id = guild_id
+        self.guild_id = guild_id
         self.id = user_id
         self.load()
 
     def load(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM users WHERE id = ?', (self.id,))
             user = cursor.fetchone()
@@ -95,7 +95,7 @@ class User:
                 self.real_name, self.hours_in_class = None, 0.0
 
     def save(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO users (id, real_name, hours_in_class)
@@ -107,7 +107,7 @@ class User:
             conn.commit()
 
     def delete(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM users WHERE id = ?', (self.id,))
             conn.commit()
@@ -119,14 +119,14 @@ class User:
 
     @property
     def is_student(self) -> bool:
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM students WHERE user_id = ?', (self.id,))
             return cursor.fetchone() is not None
 
     @property
     def is_teacher(self) -> bool:
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM teachers WHERE user_id = ?', (self.id,))
             return cursor.fetchone() is not None
@@ -142,7 +142,7 @@ class Subuser(User):
         self.subuser_id = subuser_id
 
     def save(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO subusers (user_id, subuser_id)
@@ -152,7 +152,7 @@ class Subuser(User):
             conn.commit()
 
     def delete(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM subusers WHERE user_id = ? AND subuser_id = ?', (self.id, self.subuser_id))
             conn.commit()
@@ -189,7 +189,7 @@ class Teacher(User):
         self.load_teacher()
 
     def load_teacher(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM teachers WHERE user_id = ?', (self.id,))
             teacher = cursor.fetchone()
@@ -198,7 +198,7 @@ class Teacher(User):
 
     def save(self):
         super().save()
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO teachers (user_id, subjects, phonenumber, availability, teaching_category)
@@ -217,7 +217,7 @@ class Teacher(User):
         self.save()
 
     def pop(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM teachers WHERE user_id = ?', (self.id,))
             conn.commit()
@@ -238,7 +238,7 @@ class Student(User):
         self.load_student()
 
     def load_student(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM students WHERE user_id = ?', (self.id,))
             student = cursor.fetchone()
@@ -247,7 +247,7 @@ class Student(User):
 
     def save(self):
         super().save()
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO students (user_id, major, customer_id)
@@ -264,7 +264,7 @@ class Student(User):
         self.save()
 
     def pop(self):
-        with DatabaseManager._connect(self.__guild_id) as conn:
+        with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM students WHERE user_id = ?', (self.id,))
             conn.commit()
@@ -272,7 +272,7 @@ class Student(User):
             conn.commit()
 
     def connect_teacher(self, teacher_id: int, channel_id: int):
-        TeacherStudentConnection(self.__guild_id, teacher_id, self.id, channel_id=channel_id).save()
+        TeacherStudentConnection(self.guild_id, teacher_id, self.id, channel_id=channel_id).save()
 
 # endregion
 
@@ -323,7 +323,7 @@ class TeacherStudentConnection:
             cursor.execute('SELECT * FROM teacher_student WHERE student_id = ?', (student_id,))
             connection = cursor.fetchone()
             if connection:
-                return TeacherStudentConnection(connection[0], connection[1], connection[2])
+                return TeacherStudentConnection(guild_id, connection[0], connection[1], connection[2])
             return None
 
     @staticmethod
@@ -333,7 +333,7 @@ class TeacherStudentConnection:
             cursor.execute('SELECT * FROM teacher_student WHERE teacher_id = ?', (teacher_id,))
             connection = cursor.fetchone()
             if connection:
-                return TeacherStudentConnection(connection[0], connection[1], connection[2])
+                return TeacherStudentConnection(guild_id, connection[0], connection[1], connection[2])
             return None
 
 # endregion
