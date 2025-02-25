@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 import os
 import asyncio
 
-from Utils.database import *  # Creates tables if required
+from Utils.database import DatabaseManager
+
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
@@ -14,6 +15,10 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 async def on_ready():
     print(f'Logged in as {bot.user}')
     print('------')
+
+    # Create database tables for all guilds
+    for guild in bot.guilds:
+        DatabaseManager.create_tables(guild.id)
 
 
 async def setup_hook():

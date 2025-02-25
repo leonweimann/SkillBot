@@ -2,11 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from Coordination.teacher import assign_teacher as _assign_teacher, unassign_teacher as _unassign_teacher
-
-from Utils.errors import *
-from Utils.logging import log
-from Utils.msg import *
+import Coordination.teacher as teacher
+import Utils.environment as env
 
 
 class TeacherCog(commands.Cog):
@@ -17,52 +14,48 @@ class TeacherCog(commands.Cog):
     async def on_ready(self):
         print(f'[COG] {self.__cog_name__} is ready')
 
+    # region Assignments
+
     @app_commands.command(
-        name='assign_teacher',
+        name='assign-teacher',
         description="Registriert einen neuen Lehrer."
     )
     @app_commands.checks.has_role('Admin')
-    async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
-        await _assign_teacher(interaction, member, teacher_name)
-        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} registriert"))
+    async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str, subject: str | None = None, phonenumber: str | None = None, availability: str | None = None):
+        await teacher.assign_teacher(interaction, member, teacher_name, subject, phonenumber, availability)
+        await env.send_safe_response(interaction, env.success_response(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
     async def assign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = self.__create_app_command_error_msg(error)
-
-        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
-
-        await safe_respond(interaction, msg, ephemeral=True)
+        await env.handle_app_command_error(interaction, error, 'assign_teacher', 'Admin')
 
     @app_commands.command(
-        name='unassign_teacher',
+        name='unassign-teacher',
         description="Entfernt einen registrierten Lehrer."
     )
     @app_commands.checks.has_role('Admin')
     async def unassign_teacher(self, interaction: discord.Interaction, member: discord.Member):
-        await _unassign_teacher(interaction, member)
-        await safe_respond(interaction, success_msg(f"Lehrer {member.mention} abgemeldet"))
+        await teacher.unassign_teacher(interaction, member)
+        await env.send_safe_response(interaction, env.success_response(f"Lehrer {member.mention} abgemeldet"))
 
     @unassign_teacher.error
     async def unassign_teacher_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = self.__create_app_command_error_msg(error)
+        await env.handle_app_command_error(interaction, error, 'unassign_teacher', 'Admin')
 
-        if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
-            await log(interaction.guild, msg, details={'Command': 'clear', 'Used by': f'{interaction.user.mention}'})
+    # endregion
 
-        await safe_respond(interaction, msg, ephemeral=True)
+    # reagion Sort Channels
 
-    def __create_app_command_error_msg(self, error: app_commands.AppCommandError) -> str:
-        match error:
-            case app_commands.MissingRole():
-                return error_msg("Du musst die Rolle 'Admin' haben, um diesen Befehl zu benutzen.")
-            case CodeError():
-                return error_msg("Ein interner Fehler ist aufgetreten.", error=error)
-            case UsageError():
-                return error_msg(str(error))
-            case _:
-                return error_msg("Ein unbekannter Fehler ist aufgetreten.", error=error)
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        await teacher.sort_channels(channel)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+        if before.name != after.name or before.category != after.category:  # Without this sorting would be infinite
+            await teacher.sort_channels(after)
+
+    # endregion
 
 
 async def setup(bot):

@@ -1,107 +1,180 @@
 import discord
 
-from Utils.channels import get_category_by_name, get_channel_by_name
-from Utils.database import *
 import Utils.environment as env
-from Utils.errors import CodeError, UsageError
-from Utils.members import get_student_nick, get_member_by_user, generate_student_channel_name
-from Utils.roles import get_student_role, get_teacher_role
+
+from Utils.database import *
+from Utils.errors import *
+from Utils.logging import log
 
 
-async def assign_student(interaction: discord.Interaction, student: discord.Member, name: str, silent: bool = False):
-    if interaction.guild is None:
-        raise CodeError("Guild is None")
+# region Assignments
 
-    teacher = get_member_by_user(interaction.guild, interaction.user)
+async def assign_student(interaction: discord.Interaction, student: discord.Member, real_name: str, customer_id: int, major: str | None = None, silent: bool = False):
+    """
+    Assign a student to a teacher in a Discord server.
 
-    if get_teacher_role(interaction.guild) not in teacher.roles:
-        raise UsageError(f"{teacher.mention} ist kein Lehrer")
+    This function assigns a student to a teacher by creating a dedicated text channel for communication,
+    setting up the student in the database, and applying the necessary roles and nicknames.
 
-    student_role = get_student_role(interaction.guild)
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        student (discord.Member): The student to be assigned.
+        name (str): The real name of the student.
+        silent (bool, optional): If True, no welcome message will be sent. Defaults to False.
 
-    if student_role in student.roles:
+    Raises:
+        CodeError: If the command is used outside of a server or by a non-member.
+        UsageError: If the user is not a teacher or the student is already registered.
+
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+    if not isinstance(teacher := interaction.user, discord.Member):
+        raise CodeError("Dieser Befehl kann nur von Mitgliedern verwendet werden")
+
+    if not env.is_teacher(teacher):
+        raise UsageError(f"Du {teacher.mention} bist kein Lehrer")
+
+    if env.is_student(student):
         raise UsageError(f"{student.mention} ist bereits ein registrierter Schüler")
 
-    teachers_category = get_category_by_name(interaction.guild, teacher.display_name)
+    # Begin student assignment
 
-    overwrites = {
-        interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        student: discord.PermissionOverwrite(read_messages=True),
-        teacher: discord.PermissionOverwrite(read_messages=True)
-    }
+    student_channel_name = env.generate_student_channel_name(real_name)
+    student_channel = discord.utils.get(interaction.guild.text_channels, name=student_channel_name)  # Search for student channel, because maybe there exists one already
+    if not student_channel:
+        # Create student channel
+        overwrites = {
+            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            student: discord.PermissionOverwrite(read_messages=True),
+            teacher: discord.PermissionOverwrite(read_messages=True)
+        }
 
-    student_channel = discord.utils.get(interaction.guild.text_channels, name=generate_student_channel_name(name))
-    if student_channel is None:
-        # Create channel since it doesn't exist yet
-        student_channel = await interaction.guild.create_text_channel(name, category=teachers_category, overwrites=overwrites)
+        db_teacher = Teacher(interaction.guild.id, interaction.user.id)
 
-    # Only add roles and nick if channel was created successfully
-    await student.add_roles(student_role)
-    await student.edit(nick=get_student_nick(name))
+        teachers_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
+        if teachers_category:
+            student_channel = await interaction.guild.create_text_channel(student_channel_name, category=teachers_category, overwrites=overwrites)
+        else:
+            raise CodeError(f"Lehrer {teacher.mention} hat keine Kategorie")
 
-    assign_student_database(interaction.user.id, student.id, name)
+    # Setup student in db
+    db_student = Student(interaction.guild.id, student.id)
+    db_student.edit(real_name=real_name, major=major, customer_id=customer_id)
 
+    # Create teacher-student connection in db
+    db_student.connect_teacher(teacher.id, student_channel.id)
+
+    # Apply student role and nickname
+    await student.add_roles(env.get_student_role(interaction.guild))
+    await student.edit(nick=env.generate_member_nick(db_student))
+
+    # Send a welcome message if not silent
     if not silent:
         await student_channel.send(f"👋 Willkommen, {student.mention}! Hier kannst du mit deinem Lehrer {teacher.mention} kommunizieren")
 
 
-def assign_student_database(teacher_id: int, student_id: int, real_name: str):
-    db_user = DBUser(student_id)
-    db_user.edit(real_name=real_name, icon='🎒', user_type='student')
-    DatabaseManager.add_student_teacher(student_id, teacher_id)
-
-
 async def unassign_student(interaction: discord.Interaction, student: discord.Member):
-    if interaction.guild is None:
-        raise CodeError('Guild is None')
+    """
+    Unassign a student from a teacher in a Discord server.
 
-    teacher = get_member_by_user(interaction.guild, interaction.user)
+    This function performs the following steps:
+    1. Validates that the command is used within a server and by a member.
+    2. Checks if the user issuing the command is a teacher.
+    3. Checks if the specified student is registered.
+    4. Verifies the teacher-student connection.
+    5. Deletes the student-teacher channel if it exists.
+    6. Resets the student's database entry to default.
+    7. Removes the teacher-student connection from the database.
+    8. Removes the student role and nickname from the student.
 
-    if get_teacher_role(interaction.guild) not in teacher.roles:
-        raise UsageError(f"{teacher.mention} ist kein Lehrer")
+    Args:
+        interaction (discord.Interaction): The interaction object representing the command invocation.
+        student (discord.Member): The Discord member object representing the student to be unassigned.
 
-    student_role = get_student_role(interaction.guild)
+    Raises:
+        CodeError: If the command is not used in a server, or if the student has no real name, or if no teacher-student connection is found.
+        UsageError: If the user issuing the command is not a teacher, or if the specified student is not registered, or if the student is not assigned to the teacher.
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
-    if student_role not in student.roles:
+    if not isinstance(teacher := interaction.user, discord.Member):
+        raise CodeError("Dieser Befehl kann nur von Mitgliedern verwendet werden")
+
+    if not env.is_teacher(teacher):
+        raise UsageError(f"Du {teacher.mention} bist kein Lehrer")
+
+    if not env.is_student(student):
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
-    student_name = DBUser(student.id).real_name
-    if student_name is None:
-        raise CodeError(f"Student {student.id} has no real name")
+    # Begin student unassignment
 
-    student_channel = get_channel_by_name(interaction.guild, generate_student_channel_name(student_name))
-    await student_channel.delete()
+    db_student = Student(interaction.guild.id, student.id)
+    if not db_student.real_name:
+        raise CodeError(f"Schüler {student.id} hat keinen echten Namen")
 
-    unassign_student_database(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
 
-    await student.remove_roles(student_role)
+    if not ts_con.channel_id:  # TODO: log if not found?
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
+
+    if ts_con.teacher_id != teacher.id:
+        raise UsageError(f"{student.mention} ist nicht dein Schüler")
+
+    student_channel = interaction.guild.get_channel(ts_con.channel_id)
+    if student_channel:
+        await student_channel.delete()
+    else:
+        # Log if no channel was found, but still continue unassignment
+        await log(interaction.guild, f"Channel für {student.mention} nicht gefunden, sollte aber `{ts_con.channel_id}` sein")
+
+    # Reset user to default member in db and remove teacher-student connection
+    db_student.pop()
+
+    # Remove student role and nickname
+    await student.remove_roles(env.get_student_role(interaction.guild))
     await student.edit(nick=None)
 
+# endregion
 
-def unassign_student_database(student_id: int):
-    db_user = DBUser(student_id)
-    db_user.edit(icon=None, user_type=None)
-    DatabaseManager.remove_student_teacher(student_id)
 
+# region Stashing
 
 async def stash_student(interaction: discord.Interaction, student: discord.Member):
+    """
+    Archives a student's channel by moving it to the archive category.
+
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        student (discord.Member): The student to be archived.
+
+    Raises:
+        CodeError: If the guild is None, the student has no teacher, or the student's channel is not found.
+        UsageError: If the student is not registered, the student is not assigned to the user, or the student is already archived.
+    """
     if interaction.guild is None:
         raise CodeError('Guild is None')
 
     if env.get_student_role(interaction.guild) not in student.roles:
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
-    teacher_id = DBUser(student.id).teacher_id
-    if teacher_id is None:
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
+
+    if ts_con.teacher_id is None:
         raise CodeError(f"Student {student.id} has no teacher")
-    elif teacher_id != interaction.user.id:
+    elif ts_con.teacher_id != interaction.user.id:
         raise UsageError(f"{student.mention} ist nicht dein Schüler")
 
-    student_name = DBUser(student.id).real_name
-    if student_name is None:
-        raise CodeError(f"Student {student.id} has no real name")
+    student_channel = discord.utils.get(interaction.guild.text_channels, id=ts_con.channel_id)
+    if student_channel is None:
+        raise CodeError(f"Student {student.id} has no channel")
 
-    student_channel = get_channel_by_name(interaction.guild, generate_student_channel_name(student_name))
     archive_channel = env.get_archive_channel(interaction.guild)
     if student_channel.category == archive_channel:
         raise UsageError(f"{student.mention} ist bereits archiviert")
@@ -110,25 +183,132 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
 
 
 async def pop_student(interaction: discord.Interaction, student: discord.Member):
+    """
+    Asynchronously handles the removal of a student from a teacher's list.
+
+    This function performs several checks to ensure the student is valid and belongs to the teacher
+    invoking the command. It also verifies that the student's channel is archived before moving it
+    to the teacher's category.
+
+    Args:
+        interaction (discord.Interaction): The interaction object representing the command invocation.
+        student (discord.Member): The Discord member object representing the student to be removed.
+
+    Raises:
+        CodeError: If the guild is None, the student has no teacher, or the student's channel is not found.
+        UsageError: If the student is not registered, does not belong to the invoking teacher, or is not archived.
+    """
     if interaction.guild is None:
         raise CodeError('Guild is None')
 
     if env.get_student_role(interaction.guild) not in student.roles:
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
-    teacher_id = DBUser(student.id).teacher_id
-    if teacher_id is None:
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
+
+    if ts_con.teacher_id is None:
         raise CodeError(f"Student {student.id} has no teacher")
-    elif teacher_id != interaction.user.id:
+    elif ts_con.teacher_id != interaction.user.id:
         raise UsageError(f"{student.mention} ist nicht dein Schüler")
 
-    student_name = DBUser(student.id).real_name
-    if student_name is None:
-        raise CodeError(f"Student {student.id} has no real name")
+    student_channel = discord.utils.get(interaction.guild.text_channels, id=ts_con.channel_id)
+    if student_channel is None:
+        raise CodeError(f"Student {student.id} has no channel")
 
-    student_channel = get_channel_by_name(interaction.guild, generate_student_channel_name(student_name))
     archive_channel = env.get_archive_channel(interaction.guild)
     if student_channel.category != archive_channel:
         raise UsageError(f"{student.mention} ist nicht archiviert")
 
-    await student_channel.edit(category=get_category_by_name(interaction.guild, interaction.user.display_name))
+    db_teacher = Teacher(interaction.guild.id, ts_con.teacher_id)
+    if not db_teacher.teaching_category:
+        raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
+
+    teacher_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
+    if not teacher_category:
+        raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
+
+    await student_channel.edit(category=teacher_category)
+
+# endregion
+
+
+# region Connecting
+
+async def connect_student(interaction: discord.Interaction, student: discord.Member, other_account: discord.Member):
+    """
+    Asynchronously connects a student with another account in a Discord server.
+
+    This function sets the necessary permissions for the other account to access the student's channel
+    and updates the nickname and roles of the other account to reflect the connection.
+
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        student (discord.Member): The student to be connected.
+        other_account (discord.Member): The account to be connected with the student.
+
+    Raises:
+        CodeError: If the command is not used in a server, if the student does not have a teacher-student connection,
+                   or if the channel for the student is not found.
+        UsageError: If the other account is already a registered student or if the user is not the teacher of the student.
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+    if env.is_student(other_account):
+        raise UsageError(f"{other_account.mention} ist ein registrierter Schüler und kann nicht mit {student.mention} verbunden werden")
+
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung gefunden")
+
+    if ts_con.teacher_id != interaction.user.id:
+        raise UsageError("Du kannst nur deine eigenen Schüler verbinden")
+
+    student_channel = interaction.guild.get_channel(ts_con.channel_id)
+    if not student_channel:
+        raise CodeError(f"Channel für Schüler {student.id} nicht gefunden")
+
+    await student_channel.set_permissions(other_account, read_messages=True, send_messages=True)
+    await other_account.edit(nick=f'{student.nick} ({other_account.display_name})')
+    await other_account.add_roles(env.get_student_role(interaction.guild))
+
+
+async def disconnect_student(interaction: discord.Interaction, student: discord.Member, other_account: discord.Member):
+    """
+    Asynchronously disconnects a student from a teacher-student connection in a Discord server.
+
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        student (discord.Member): The student to be disconnected.
+        other_account (discord.Member): The other account to remove permissions from.
+
+    Raises:
+        CodeError: If the command is used outside of a server, if the student has no teacher-student connection,
+                   if the channel for the student is not found, or if the user is not the teacher of the student.
+        UsageError: If the user is not the teacher of the student.
+
+    Notes:
+        This function removes the permissions of the other account from the student's channel,
+        resets the nickname of the other account, and removes the student role from the other account.
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung gefunden")
+
+    if ts_con.teacher_id != interaction.user.id:
+        raise UsageError("Du kannst nur deine eigenen Schüler trennen")
+
+    student_channel = interaction.guild.get_channel(ts_con.channel_id)
+    if not student_channel:
+        raise CodeError(f"Channel für Schüler {student.id} nicht gefunden")
+
+    await student_channel.set_permissions(other_account, overwrite=None)
+    await other_account.edit(nick=None)
+    await other_account.remove_roles(env.get_student_role(interaction.guild))
+
+# endregion

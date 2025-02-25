@@ -3,8 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from Utils.database import *
+import Utils.environment as env
 from Utils.logging import log
-from Utils.msg import error_msg
 
 
 class LevelingCog(commands.Cog):
@@ -25,11 +25,10 @@ class LevelingCog(commands.Cog):
         2. When a member leaves the voice channel named 'klassenzimmer', it transfers the hours
         spent in the channel to the users hours_in_class property.
         """
-        db_user = DBUser(member.id)
         if before.channel is None and after.channel is not None and after.channel.name == 'klassenzimmer':
-            db_user.save_voice_channel_join(after.channel.id)
+            UserVoiceChannelJoin(member.guild.id, member.id, after.channel.id).save()
         elif before.channel is not None and before.channel.name == 'klassenzimmer' and after.channel != before.channel:
-            db_user.transfer_hours_in_class_from_user_voice_channel_join()
+            UserVoiceChannelJoin.transfer_hours(member.guild.id, member.id)
 
     @app_commands.command(
         name='time',
@@ -40,19 +39,19 @@ class LevelingCog(commands.Cog):
         Command that allows users to check the total time spent in the voice channel 'klassenzimmer'.
         """
         if interaction.guild is None:
-            await interaction.response.send_message(error_msg('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
             return
 
         if not user:
             if isinstance(interaction.user, discord.Member):
                 user = interaction.user
             else:
-                msg = error_msg('Ein Fehler beim Finden des Richtigen Nutzers ist aufgekommen.')
+                msg = env.failure_response('Ein Fehler beim Finden des Richtigen Nutzers ist aufgekommen.')
                 await log(interaction.guild, msg, {'Used by': f'{interaction.user.mention}'})
                 await interaction.response.send_message(msg, ephemeral=True)
                 return
 
-        db_user = DBUser(user.id)
+        db_user = User(interaction.guild.id, user.id)
         await interaction.response.send_message(f'{user.mention} hat insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 
     @app_commands.command(
@@ -65,19 +64,19 @@ class LevelingCog(commands.Cog):
         Command that allows users to set the total time spent in the voice channel 'klassenzimmer'.
         """
         if interaction.guild is None:
-            await interaction.response.send_message(error_msg('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
             return
 
-        db_user = DBUser(user.id)
+        db_user = User(interaction.guild.id, user.id)
         db_user.edit(hours_in_class=hours)
         await interaction.response.send_message(f'{user.mention} hat jetzt insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 
     @set_hours.error
     async def set_hours_error(self, interaction, error):
         if isinstance(error, commands.MissingRole):
-            await interaction.response.send_message(error_msg('Du hast nicht die Berechtigung, diesen Befehl auszuführen.'), ephemeral=True)
+            await interaction.response.send_message(env.failure_response('Du hast nicht die Berechtigung, diesen Befehl auszuführen.'), ephemeral=True)
         else:
-            msg = error_msg('Ein Fehler ist aufgetreten.', error)
+            msg = env.failure_response('Ein Fehler ist aufgetreten.', error)
             await log(interaction.guild, msg, {'Used by': f'{interaction.user.mention}'})
             await interaction.response.send_message(msg, ephemeral=True)
 
