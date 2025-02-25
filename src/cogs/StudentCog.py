@@ -21,8 +21,8 @@ class StudentCog(commands.Cog):
         description="Registriert einen neuen Schüler."
     )
     @app_commands.checks.has_role('Lehrer')
-    async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str, silent: bool = False):
-        await student.assign_student(interaction, member, student_name, silent)
+    async def assign_student(self, interaction: discord.Interaction, member: discord.Member, student_name: str, customer_id: int, major: str | None = None, silent: bool = False):
+        await student.assign_student(interaction, member, student_name, customer_id, major, silent)
         await env.send_safe_response(interaction, env.success_response(f"Schüler {member.mention} registriert"))
 
     @assign_student.error

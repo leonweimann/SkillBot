@@ -21,8 +21,8 @@ class TeacherCog(commands.Cog):
         description="Registriert einen neuen Lehrer."
     )
     @app_commands.checks.has_role('Admin')
-    async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str):
-        await teacher.assign_teacher(interaction, member, teacher_name)
+    async def assign_teacher(self, interaction: discord.Interaction, member: discord.Member, teacher_name: str, subject: str | None = None, phonenumber: str | None = None, availability: str | None = None):
+        await teacher.assign_teacher(interaction, member, teacher_name, subject, phonenumber, availability)
         await env.send_safe_response(interaction, env.success_response(f"Lehrer {member.mention} registriert"))
 
     @assign_teacher.error
