@@ -39,10 +39,10 @@ class Greetings(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         try:
-            db_user = User(member.id)
+            db_user = User(member.guild.id, member.id)
 
             if env.is_student(member):  # Delete student channel
-                ts_con = TeacherStudentConnection.find_by_student(member.id)
+                ts_con = TeacherStudentConnection.find_by_student(member.guild.id, member.id)
                 if ts_con and ts_con.channel_id:
                     student_channel = member.guild.get_channel(ts_con.channel_id)
                     if student_channel:

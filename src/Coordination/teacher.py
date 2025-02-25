@@ -19,7 +19,7 @@ async def assign_teacher(interaction: discord.Interaction, teacher: discord.Memb
     # Begin teacher assignment
 
     # Setup teacher in db
-    db_teacher = Teacher(teacher.id)
+    db_teacher = Teacher(interaction.guild.id, teacher.id)
     db_teacher.edit(real_name=real_name, subjects=subjects, phonenumber=phonenumber, availability=availability)
 
     # Configure teachers category
@@ -56,7 +56,7 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 
     # Begin teacher unassignment
 
-    db_teacher = Teacher(teacher.id)
+    db_teacher = Teacher(interaction.guild.id, teacher.id)
 
     # Ensure that teacher has no current students
     teacher_category_name = env.generate_member_nick(db_teacher)

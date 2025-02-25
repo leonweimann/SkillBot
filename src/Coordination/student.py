@@ -51,7 +51,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
             teacher: discord.PermissionOverwrite(read_messages=True)
         }
 
-        db_teacher = Teacher(interaction.user.id)
+        db_teacher = Teacher(interaction.guild.id, interaction.user.id)
 
         teachers_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
         if teachers_category:
@@ -60,7 +60,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
             raise CodeError(f"Lehrer {teacher.mention} hat keine Kategorie")
 
     # Setup student in db
-    db_student = Student(student.id)
+    db_student = Student(interaction.guild.id, student.id)
     db_student.edit(real_name=real_name, major=major, customer_id=customer_id)
 
     # Create teacher-student connection in db
@@ -111,11 +111,11 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
 
     # Begin student unassignment
 
-    db_student = Student(student.id)
+    db_student = Student(interaction.guild.id, student.id)
     if not db_student.real_name:
         raise CodeError(f"Schüler {student.id} hat keinen echten Namen")
 
-    ts_con = TeacherStudentConnection.find_by_student(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
 
@@ -162,7 +162,7 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
     if env.get_student_role(interaction.guild) not in student.roles:
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
-    ts_con = TeacherStudentConnection.find_by_student(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
 
@@ -204,7 +204,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if env.get_student_role(interaction.guild) not in student.roles:
         raise UsageError(f"{student.mention} ist kein registrierter Schüler")
 
-    ts_con = TeacherStudentConnection.find_by_student(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
 
@@ -221,7 +221,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if student_channel.category != archive_channel:
         raise UsageError(f"{student.mention} ist nicht archiviert")
 
-    db_teacher = Teacher(ts_con.teacher_id)
+    db_teacher = Teacher(interaction.guild.id, ts_con.teacher_id)
     if not db_teacher.teaching_category:
         raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
 
@@ -259,7 +259,7 @@ async def connect_student(interaction: discord.Interaction, student: discord.Mem
     if env.is_student(other_account):
         raise UsageError(f"{other_account.mention} ist ein registrierter Schüler und kann nicht mit {student.mention} verbunden werden")
 
-    ts_con = TeacherStudentConnection.find_by_student(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung gefunden")
 
@@ -296,7 +296,7 @@ async def disconnect_student(interaction: discord.Interaction, student: discord.
     if not interaction.guild:
         raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
-    ts_con = TeacherStudentConnection.find_by_student(student.id)
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung gefunden")
 

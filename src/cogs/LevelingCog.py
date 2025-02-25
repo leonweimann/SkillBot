@@ -26,9 +26,9 @@ class LevelingCog(commands.Cog):
         spent in the channel to the users hours_in_class property.
         """
         if before.channel is None and after.channel is not None and after.channel.name == 'klassenzimmer':
-            UserVoiceChannelJoin(member.id, after.channel.id).save()
+            UserVoiceChannelJoin(member.guild.id, member.id, after.channel.id).save()
         elif before.channel is not None and before.channel.name == 'klassenzimmer' and after.channel != before.channel:
-            UserVoiceChannelJoin.transfer_hours(member.id)
+            UserVoiceChannelJoin.transfer_hours(member.guild.id, member.id)
 
     @app_commands.command(
         name='time',
@@ -51,7 +51,7 @@ class LevelingCog(commands.Cog):
                 await interaction.response.send_message(msg, ephemeral=True)
                 return
 
-        db_user = User(user.id)
+        db_user = User(interaction.guild.id, user.id)
         await interaction.response.send_message(f'{user.mention} hat insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 
     @app_commands.command(
@@ -67,7 +67,7 @@ class LevelingCog(commands.Cog):
             await interaction.response.send_message(env.failure_response('Dieser Befehl kann nur in einem Server verwendet werden.'), ephemeral=True)
             return
 
-        db_user = User(user.id)
+        db_user = User(interaction.guild.id, user.id)
         db_user.edit(hours_in_class=hours)
         await interaction.response.send_message(f'{user.mention} hat jetzt insgesamt {db_user.hours_in_class} Stunden im "klassenzimmer" verbracht.')
 

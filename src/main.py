@@ -16,6 +16,10 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     print('------')
 
+    # Create database tables for all guilds
+    for guild in bot.guilds:
+        DatabaseManager.create_tables(guild.id)
+
 
 async def setup_hook():
     for filename in os.listdir('./src/cogs'):
@@ -43,9 +47,6 @@ def get_discord_token() -> str:
 async def main():
     async with bot:
         await bot.start(get_discord_token())
-
-
-DatabaseManager.create_tables()
 
 
 asyncio.run(main())
