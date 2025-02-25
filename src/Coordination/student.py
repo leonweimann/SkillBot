@@ -198,7 +198,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
         CodeError: If the guild is None, the student has no teacher, or the student's channel is not found.
         UsageError: If the student is not registered, does not belong to the invoking teacher, or is not archived.
     """
-    if interaction.guild is None:
+    if not interaction.guild:
         raise CodeError('Guild is None')
 
     if env.get_student_role(interaction.guild) not in student.roles:
@@ -208,7 +208,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if not ts_con:
         raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung")
 
-    if ts_con.teacher_id is None:
+    if not ts_con.teacher_id:
         raise CodeError(f"Student {student.id} has no teacher")
     elif ts_con.teacher_id != interaction.user.id:
         raise UsageError(f"{student.mention} ist nicht dein Schüler")

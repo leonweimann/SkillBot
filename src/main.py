@@ -18,6 +18,7 @@ async def on_ready():
 
     # Create database tables for all guilds
     for guild in bot.guilds:
+        print(f'Creating tables for guild: {guild.name}')
         DatabaseManager.create_tables(guild.id)
 
 
