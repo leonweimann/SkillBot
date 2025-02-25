@@ -14,28 +14,27 @@ class Greetings(commands.Cog):
     async def on_ready(self):
         print(f'[COG] {self.__cog_name__} is ready')
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        try:
-            db_user = User(member.id)
-            db_user.edit(real_name=member.name)
+    # @commands.Cog.listener()
+    # async def on_member_join(self, member: discord.Member):
+    #     try:
+    #         User(member.id).save()
 
-            await log(
-                member.guild, f'Added {member.mention if member.nick is None else member.nick} to database',
-                details={
-                    'Name': f'{member.name}',
-                    'ID': f'{member.id}'
-                }
-            )
-        except Exception as e:
-            await log(
-                member.guild, f'Failed to add {member.mention if member.nick is None else member.nick} to database',
-                details={
-                    'Name': f'{member.name}',
-                    'ID': f'{member.id}',
-                    'Error': f'{e}'
-                }
-            )
+    #         await log(
+    #             member.guild, f'Added {member.mention if member.nick is None else member.nick} to database',
+    #             details={
+    #                 'Name': f'{member.name}',
+    #                 'ID': f'{member.id}'
+    #             }
+    #         )
+    #     except Exception as e:
+    #         await log(
+    #             member.guild, f'Failed to add {member.mention if member.nick is None else member.nick} to database',
+    #             details={
+    #                 'Name': f'{member.name}',
+    #                 'ID': f'{member.id}',
+    #                 'Error': f'{e}'
+    #             }
+    #         )
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):

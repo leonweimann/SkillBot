@@ -5,7 +5,7 @@ from datetime import datetime
 
 # region DatabaseManager
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '../../data/new_skillbot.db')  # TODO: Change to skillbot.db
+DB_PATH = os.path.join(os.path.dirname(__file__), '../../data/dev_skillbot.db')  # TODO: Change to skillbot.db
 
 
 class DatabaseManager:
@@ -38,7 +38,7 @@ class DatabaseManager:
                     subjects TEXT,
                     phonenumber TEXT,
                     availability TEXT,
-                    teaching_category INTEGER NOT NULL,
+                    teaching_category INTEGER,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')

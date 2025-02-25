@@ -1,7 +1,8 @@
 import discord
 
-from Utils.database import *
 import Utils.environment as env
+
+from Utils.database import *
 from Utils.errors import *
 from Utils.logging import log
 
@@ -41,7 +42,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
     # Begin student assignment
 
     student_channel_name = env.generate_student_channel_name(real_name)
-    student_channel = env.__unwrapped_get(interaction.guild.text_channels, student_channel_name)  # Search for student channel, because maybe there exists one already
+    student_channel = discord.utils.get(interaction.guild.text_channels, name=student_channel_name)  # Search for student channel, because maybe there exists one already
     if not student_channel:
         # Create student channel
         overwrites = {
@@ -50,8 +51,13 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
             teacher: discord.PermissionOverwrite(read_messages=True)
         }
 
-        teachers_category = env.__unwrapped_get(interaction.guild.categories, teacher.display_name)
-        student_channel = await interaction.guild.create_text_channel(student_channel_name, category=teachers_category, overwrites=overwrites)
+        db_teacher = Teacher(interaction.user.id)
+
+        teachers_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
+        if teachers_category:
+            student_channel = await interaction.guild.create_text_channel(student_channel_name, category=teachers_category, overwrites=overwrites)
+        else:
+            raise CodeError(f"Lehrer {teacher.mention} hat keine Kategorie")
 
     # Setup student in db
     db_student = Student(student.id)
@@ -215,7 +221,15 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if student_channel.category != archive_channel:
         raise UsageError(f"{student.mention} ist nicht archiviert")
 
-    await student_channel.edit(category=env.__unwrapped_get(interaction.guild.categories, interaction.user.display_name))
+    db_teacher = Teacher(ts_con.teacher_id)
+    if not db_teacher.teaching_category:
+        raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
+
+    teacher_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
+    if not teacher_category:
+        raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
+
+    await student_channel.edit(category=teacher_category)
 
 # endregion
 
