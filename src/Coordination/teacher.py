@@ -6,6 +6,8 @@ from Utils.database import *
 from Utils.errors import *
 from Utils.logging import log
 
+import asyncio
+
 
 # region Assignments
 
@@ -86,28 +88,38 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 
 # region Sort Channels
 
+
 async def sort_channels(channel: discord.abc.GuildChannel):
     """
-    Sorts the channels within a category that has '🎓' in its name. The 'cmd' channel stays the first one.
-
-    This function checks if the given channel is part of a category with '🎓' in its name.
-    If so, it sorts all channels in that category alphabetically by their names and updates their positions accordingly,
-    keeping the 'cmd' channel at the top.
-
-    Args:
-        channel (discord.abc.GuildChannel): The channel to check and sort within its category.
+    Sortiert Channels in einer Kategorie, die '🎓' im Namen trägt.
+    Der 'cmd'-Channel bleibt immer an erster Stelle.
     """
-    if channel.category and '🎓' in channel.category.name:  # only sort channels in a teacher category
+    # Prüfe, ob der Channel zu einer relevanten Kategorie gehört
+    if channel.category and ('🎓' in channel.category.name or env.get_archive_channel(channel.guild)):
         channels = channel.category.channels
         cmd_channel = next((c for c in channels if c.name == 'cmd'), None)
-        other_channels = sorted((c for c in channels if c.name != 'cmd'), key=lambda c: c.name)
+        other_channels = sorted((c for c in channels if c.name != 'cmd'), key=lambda c: c.name.lower())
 
+        tasks = []
+        position = 0
+
+        # Setze 'cmd' immer an die erste Stelle, falls vorhanden
         if cmd_channel:
-            await cmd_channel.edit(position=0)
-            for i, c in enumerate(other_channels, start=1):
-                await c.edit(position=i)
-        else:
-            for i, c in enumerate(other_channels):
-                await c.edit(position=i)
+            if cmd_channel.position != 0:
+                tasks.append(cmd_channel.edit(position=0))
+            position = 1
+
+        # Setze die restlichen Channels in sortierter Reihenfolge
+        for c in other_channels:
+            if c.position != position:
+                tasks.append(c.edit(position=position))
+            position += 1
+
+        # Starte alle Änderungen parallel
+        if tasks:
+            await asyncio.gather(*tasks)
+
+        # Debugging-Informationen
+        print(f"Channels in category '{channel.category.name}' sorted. cmd_channel at position 0, others sorted alphabetically.")
 
 # endregion
