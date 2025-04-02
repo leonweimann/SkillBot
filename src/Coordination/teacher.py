@@ -89,6 +89,7 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 # region Sort Channels
 
 
+# TODO: Fix sorting - doesn't work properly
 async def sort_channels(channel: discord.abc.GuildChannel):
     """
     Sortiert Channels in einer Kategorie, die '🎓' im Namen trägt.
@@ -118,8 +119,5 @@ async def sort_channels(channel: discord.abc.GuildChannel):
         # Starte alle Änderungen parallel
         if tasks:
             await asyncio.gather(*tasks)
-
-        # Debugging-Informationen
-        print(f"Channels in category '{channel.category.name}' sorted. cmd_channel at position 0, others sorted alphabetically.")
 
 # endregion
