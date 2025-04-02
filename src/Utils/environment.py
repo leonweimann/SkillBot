@@ -145,6 +145,19 @@ def is_admin(member: discord.Member) -> bool:
     """
     return get_admin_role(member.guild) in member.roles
 
+
+def is_assigned(member: discord.Member) -> bool:
+    """
+    Checks if the given Discord member has any of the roles: 'Schüler', 'Lehrer', or 'Admin'.
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member has any of the specified roles, False otherwise.
+    """
+    return is_student(member) or is_teacher(member) or is_admin(member)
+
 # endregion
 
 
