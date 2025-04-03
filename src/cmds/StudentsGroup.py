@@ -3,12 +3,12 @@ from discord import app_commands
 from typing import Callable
 
 import Utils.environment as env
-import Utils.database as db
 import Coordination.student as student
 
 from Utils.errors import CodeError
 
 
+@app_commands.guild_only()
 class StudentsGroup(app_commands.Group):
     @staticmethod
     def _filter_members(
