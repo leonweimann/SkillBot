@@ -243,6 +243,29 @@ def generate_member_nick(db_member: User) -> str:
     """
     return f'{'🎓' if db_member.is_teacher else '🎒' if db_member.is_student else '👋'} {db_member.real_name}'
 
+
+def is_member_archived(member: discord.Member) -> bool:
+    """
+    Checks if the given Discord member is archived.
+
+    A member is archived if:
+    - For students: The teacher-student channel is in the archive category.
+    - For teachers: NOT IMPLEMENTED YET
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member is archived, False otherwise.
+    """
+    if is_student(member):
+        ts_con = TeacherStudentConnection.find_by_student(member.guild.id, member.id)
+        if ts_con:
+            channel = member.guild.get_channel(ts_con.channel_id)
+            if channel and channel.category == get_archive_channel(member.guild):
+                return True
+    return False
+
 # endregion
 
 
