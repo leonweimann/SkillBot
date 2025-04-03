@@ -206,27 +206,33 @@ def generate_student_channel_name(student_name: str):
 
 # region Members
 
-def get_member(guild: discord.Guild, id: int | str) -> discord.Member:
+def get_member(source: discord.Guild | discord.Interaction, id: int | str) -> discord.Member:
     """
-    Retrieves the Discord member with the given ID from the given guild.
+    Retrieves the Discord member with the given ID from the given source.
 
     Args:
-        guild (discord.Guild): The Discord guild from which to retrieve the member.
+        source (discord.Guild | discord.Interaction): The source from which to retrieve the member. 
+            Can be a Discord guild or an interaction.
         id (int | str): The ID of the member to retrieve. Can be an integer or a string.
 
     Returns:
-        discord.Member: The member object corresponding to the ID in the guild.
+        discord.Member: The member object corresponding to the ID in the source.
 
     Raises:
-        CodeError: If the ID is not a valid integer or if the member is not found in the guild.
+        CodeError: If the ID is not a valid integer, if the source does not contain a guild, 
+            or if the member is not found in the source.
     """
-    match id:
-        case str():
-            if not id.isdigit():
-                raise CodeError(f'ID {id} is not a valid integer')
-            id = int(id)
+    if isinstance(id, str):
+        if not id.isdigit():
+            raise CodeError(f'ID {id} is not a valid integer')
+        id = int(id)
 
-    if result := discord.utils.get(guild.members, id=id):
+    if isinstance(source, discord.Interaction):
+        if not source.guild:
+            raise CodeError("Guild not found in the interaction")
+        source = source.guild
+
+    if result := discord.utils.get(source.members, id=id):
         return result
     raise CodeError(f'Member with ID {id} not found')
 
