@@ -3,6 +3,9 @@ from discord import app_commands
 from typing import Callable
 
 import Utils.environment as env
+import Coordination.student as student
+
+from Utils.errors import CodeError
 
 
 class StudentsGroup(app_commands.Group):
@@ -30,22 +33,31 @@ class StudentsGroup(app_commands.Group):
         description="Assigns a new student on this server."
     )
     @app_commands.describe(
-        member_name="The member to assign",
+        member_id="The member to assign",
         real_name="The real name of the student",
         customer_id="The customer ID of the student"
     )
     @app_commands.checks.has_role('Lehrer')
-    async def assign(self, interaction: discord.Interaction, member_name: str, real_name: str, customer_id: int):
-        member = interaction.guild.get_member(int(member_name)) if interaction.guild else None
-        if not member:
-            await interaction.response.send_message("Member not found.", ephemeral=True)
-            return
+    async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
+        if not interaction.guild:
+            raise CodeError("Guild not found")
 
-        await interaction.response.send_message(
-            f"Assigning {member.display_name} as {real_name} with customer ID {customer_id}."
+        member = env.get_member(interaction.guild, member_id)
+
+        await student.assign_student(
+            interaction=interaction,
+            student=member,
+            real_name=real_name,
+            customer_id=customer_id,
+            major=None,
+            silent=False
         )
 
-    @assign.autocomplete('member_name')
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {member.mention} registriert")
+        )
+
+    @assign.autocomplete('member_id')
     async def assign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(interaction, current, lambda m: not env.is_assigned(m))
 
@@ -60,20 +72,25 @@ class StudentsGroup(app_commands.Group):
         description="Unassigns a student on this server."
     )
     @app_commands.describe(
-        member_name="The member to unassign"
+        member_id="The member to unassign"
     )
     @app_commands.checks.has_role('Lehrer')
-    async def unassign(self, interaction: discord.Interaction, member_name: str):
-        member = interaction.guild.get_member(int(member_name)) if interaction.guild else None
-        if not member:
-            await interaction.response.send_message("Member not found.", ephemeral=True)
-            return
+    async def unassign(self, interaction: discord.Interaction, member_id: str):
+        if not interaction.guild:
+            raise CodeError("Guild not found")
 
-        await interaction.response.send_message(
-            f"Unassigning {member.display_name}."
+        member = env.get_member(interaction.guild, member_id)
+
+        await student.unassign_student(
+            interaction=interaction,
+            student=member
         )
 
-    @unassign.autocomplete('member_name')
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {member.mention} abgemeldet")
+        )
+
+    @unassign.autocomplete('member_id')
     async def unassign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(interaction, current, env.is_student)
 
