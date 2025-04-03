@@ -50,10 +50,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
-        if not interaction.guild:
-            raise CodeError("Guild not found")
-
-        member = env.get_member(interaction.guild, member_id)
+        member = self._get_member(interaction, member_id)
 
         await student.assign_student(
             interaction=interaction,
@@ -70,7 +67,9 @@ class StudentsGroup(app_commands.Group):
 
     @assign.autocomplete('member_id')
     async def assign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(interaction, current, lambda m: not env.is_assigned(m))
+        return self._filter_members(
+            interaction, current, lambda m: not env.is_assigned(m)
+        )
 
     @assign.error
     async def assign_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -87,10 +86,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def unassign(self, interaction: discord.Interaction, member_id: str):
-        if not interaction.guild:
-            raise CodeError("Guild not found")
-
-        member = env.get_member(interaction.guild, member_id)
+        member = self._get_member(interaction, member_id)
 
         await student.unassign_student(
             interaction=interaction,
@@ -103,7 +99,9 @@ class StudentsGroup(app_commands.Group):
 
     @unassign.autocomplete('member_id')
     async def unassign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(interaction, current, env.is_student)
+        return self._filter_members(
+            interaction, current, env.is_student
+        )
 
     @unassign.error
     async def unassign_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -111,6 +109,7 @@ class StudentsGroup(app_commands.Group):
             interaction, error, command_name="students unassign", reqired_role="Lehrer"
         )
 
+    # endregion Assignments
 
 async def setup(bot):
     bot.tree.add_command(
