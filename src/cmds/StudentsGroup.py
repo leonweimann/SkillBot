@@ -3,6 +3,7 @@ from discord import app_commands
 from typing import Callable
 
 import Utils.environment as env
+import Utils.database as db
 import Coordination.student as student
 
 from Utils.errors import CodeError
@@ -178,6 +179,92 @@ class StudentsGroup(app_commands.Group):
         )
 
     # endregion Stashing
+
+    # region Connections
+
+    @app_commands.command(
+        name='connect',
+        description='Connects a member to an existing student.'
+    )
+    @app_commands.describe(
+        member_id='The student to connect to',
+        other_id='The member to connect to the student'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def connect(self, interaction: discord.Interaction, member_id: str, other_id: str):
+        member = self._get_member(interaction, member_id)
+        other = self._get_member(interaction, other_id)
+
+        await student.connect_student(
+            interaction=interaction,
+            student=member,
+            other_account=other
+        )
+
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {other.mention} mit {member.mention} verbunden")
+        )
+
+    @connect.autocomplete('member_id')
+    async def connect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, env.is_student
+        )
+
+    @connect.autocomplete('other_id')
+    async def connect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, lambda m: not env.is_assigned(m)
+        )
+
+    @connect.error
+    async def connect_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students connect", reqired_role="Lehrer"
+        )
+
+    @app_commands.command(
+        name='disconnect',
+        description='Disconnects a member from an existing student.'
+    )
+    @app_commands.describe(
+        member_id='The student to disconnect from',
+        other_id='The member to disconnect from the student'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def disconnect(self, interaction: discord.Interaction, member_id: str, other_id: str):
+        member = self._get_member(interaction, member_id)
+        other = self._get_member(interaction, other_id)
+
+        await student.disconnect_student(
+            interaction=interaction,
+            student=member,
+            other_account=other
+        )
+
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {other.mention} von {member.mention} getrennt")
+        )
+
+    @disconnect.autocomplete('member_id')
+    async def disconnect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, env.is_student
+        )
+
+    @disconnect.autocomplete('other_id')
+    async def disconnect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, env.is_student  # Could be done better, by filtering really only corresponding members / subusers
+        )
+
+    @disconnect.error
+    async def disconnect_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students disconnect", reqired_role="Lehrer"
+        )
+
+    # endregion Connections
 
 
 async def setup(bot):
