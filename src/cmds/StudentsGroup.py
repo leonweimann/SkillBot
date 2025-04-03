@@ -1,11 +1,8 @@
 import discord
 from discord import app_commands
-from typing import Callable
 
 import Utils.environment as env
 import Coordination.student as coord
-
-from Utils.errors import CodeError
 
 
 @app_commands.guild_only()
