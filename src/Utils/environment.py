@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Callable, Iterable
 
 import discord
 
@@ -265,6 +265,25 @@ def is_member_archived(member: discord.Member) -> bool:
             if channel and channel.category == get_archive_channel(member.guild):
                 return True
     return False
+
+
+def filter_members_for_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+    predicate: Callable[[discord.Member], bool]
+) -> list[app_commands.Choice[str]]:
+    if not interaction.guild:
+        return []
+
+    filtered = (
+        member for member in interaction.guild.members
+        if predicate(member) and not member.bot and current.lower() in member.display_name.lower()
+    )
+
+    return [
+        app_commands.Choice(name=member.display_name, value=str(member.id))
+        for member in filtered
+    ][:25]
 
 # endregion
 

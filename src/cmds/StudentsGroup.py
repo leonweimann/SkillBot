@@ -11,25 +11,6 @@ from Utils.errors import CodeError
 @app_commands.guild_only()
 class StudentsGroup(app_commands.Group):
     @staticmethod
-    def _filter_members(
-        interaction: discord.Interaction,
-        current: str,
-        predicate: Callable[[discord.Member], bool]
-    ) -> list[app_commands.Choice[str]]:
-        if not interaction.guild:
-            return []
-
-        filtered = (
-            member for member in interaction.guild.members
-            if predicate(member) and not member.bot and current.lower() in member.display_name.lower()
-        )
-
-        return [
-            app_commands.Choice(name=member.display_name, value=str(member.id))
-            for member in filtered
-        ][:25]
-
-    @staticmethod
     def _get_member(
         interaction: discord.Interaction,
         member_id: str
@@ -68,7 +49,7 @@ class StudentsGroup(app_commands.Group):
 
     @assign.autocomplete('member_id')
     async def assign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, lambda m: not env.is_assigned(m)
         )
 
@@ -100,7 +81,7 @@ class StudentsGroup(app_commands.Group):
 
     @unassign.autocomplete('student_id')
     async def unassign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, env.is_student
         )
 
@@ -136,7 +117,7 @@ class StudentsGroup(app_commands.Group):
 
     @stash.autocomplete('student_id')
     async def stash_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, lambda m: env.is_student(m) and not env.is_member_archived(m)
         )
 
@@ -168,7 +149,7 @@ class StudentsGroup(app_commands.Group):
 
     @pop.autocomplete('student_id')
     async def pop_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, lambda m: env.is_student(m) and env.is_member_archived(m)
         )
 
@@ -207,13 +188,13 @@ class StudentsGroup(app_commands.Group):
 
     @connect.autocomplete('student_id')
     async def connect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, env.is_student
         )
 
     @connect.autocomplete('new_account_id')
     async def connect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, lambda m: not env.is_assigned(m)
         )
 
@@ -248,13 +229,13 @@ class StudentsGroup(app_commands.Group):
 
     @disconnect.autocomplete('student_id')
     async def disconnect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, env.is_student
         )
 
     @disconnect.autocomplete('new_account_id')
     async def disconnect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return self._filter_members(
+        return env.filter_members_for_autocomplete(
             interaction, current, env.is_student  # Could be done better, by filtering really only corresponding members / subusers
         )
 
