@@ -274,3 +274,4 @@ async def setup(bot):
             description="Commands for students"
         )
     )
+    print('[StudentsGroup] StudentsGroup loaded')
