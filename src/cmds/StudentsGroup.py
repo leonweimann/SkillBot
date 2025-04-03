@@ -28,6 +28,17 @@ class StudentsGroup(app_commands.Group):
             for member in filtered
         ][:25]
 
+    @staticmethod
+    def _get_member(
+        interaction: discord.Interaction,
+        member_id: str
+    ) -> discord.Member:
+        if not interaction.guild:
+            raise CodeError("Guild not found")
+        return env.get_member(interaction.guild, member_id)
+
+    # region Assignments
+
     @app_commands.command(
         name="assign",
         description="Assigns a new student on this server."
