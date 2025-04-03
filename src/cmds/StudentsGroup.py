@@ -111,6 +111,75 @@ class StudentsGroup(app_commands.Group):
 
     # endregion Assignments
 
+    # region Stashing
+
+    @app_commands.command(
+        name="stash",
+        description="Stashes a student on this server."
+    )
+    @app_commands.describe(
+        member_id="The member to stash"
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def stash(self, interaction: discord.Interaction, member_id: str):
+        member = self._get_member(interaction, member_id)
+
+        await student.stash_student(
+            interaction=interaction,
+            student=member
+        )
+
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {member.mention} archiviert")
+        )
+
+    @stash.autocomplete('member_id')
+    async def stash_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, lambda m: env.is_student(m) and not env.is_member_archived(m)
+        )
+
+    @stash.error
+    async def stash_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students stash", reqired_role="Lehrer"
+        )
+
+    @app_commands.command(
+        name="pop",
+        description="Unstashes a student on this server."
+    )
+    @app_commands.describe(
+        member_id="The member to pop"
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def pop(self, interaction: discord.Interaction, member_id: str):
+        member = self._get_member(interaction, member_id)
+
+        await student.pop_student(
+            interaction=interaction,
+            student=member
+        )
+
+        await env.send_safe_response(
+            interaction, env.success_response(f"Schüler {member.mention} wiederhergestellt")
+        )
+
+    @pop.autocomplete('member_id')
+    async def pop_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return self._filter_members(
+            interaction, current, lambda m: env.is_student(m) and env.is_member_archived(m)
+        )
+
+    @pop.error
+    async def pop_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students pop", reqired_role="Lehrer"
+        )
+
+    # endregion Stashing
+
+
 async def setup(bot):
     bot.tree.add_command(
         StudentsGroup(
