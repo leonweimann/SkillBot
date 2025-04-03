@@ -3,7 +3,7 @@ from discord import app_commands
 from typing import Callable
 
 import Utils.environment as env
-import Coordination.student as student
+import Coordination.student as coord
 
 from Utils.errors import CodeError
 
@@ -53,7 +53,7 @@ class StudentsGroup(app_commands.Group):
     async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
         member = self._get_member(interaction, member_id)
 
-        await student.assign_student(
+        await coord.assign_student(
             interaction=interaction,
             student=member,
             real_name=real_name,
@@ -83,22 +83,22 @@ class StudentsGroup(app_commands.Group):
         description="Unassigns a student on this server."
     )
     @app_commands.describe(
-        member_id="The member to unassign"
+        student_id="The student to unassign"
     )
     @app_commands.checks.has_role('Lehrer')
-    async def unassign(self, interaction: discord.Interaction, member_id: str):
-        member = self._get_member(interaction, member_id)
+    async def unassign(self, interaction: discord.Interaction, student_id: str):
+        student = self._get_member(interaction, student_id)
 
-        await student.unassign_student(
+        await coord.unassign_student(
             interaction=interaction,
-            student=member
+            student=student
         )
 
         await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {member.mention} abgemeldet")
+            interaction, env.success_response(f"Schüler {student.mention} abgemeldet")
         )
 
-    @unassign.autocomplete('member_id')
+    @unassign.autocomplete('student_id')
     async def unassign_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, env.is_student
@@ -119,22 +119,22 @@ class StudentsGroup(app_commands.Group):
         description="Stashes a student on this server."
     )
     @app_commands.describe(
-        member_id="The member to stash"
+        student_id="The student to stash"
     )
     @app_commands.checks.has_role('Lehrer')
-    async def stash(self, interaction: discord.Interaction, member_id: str):
-        member = self._get_member(interaction, member_id)
+    async def stash(self, interaction: discord.Interaction, student_id: str):
+        student = self._get_member(interaction, student_id)
 
-        await student.stash_student(
+        await coord.stash_student(
             interaction=interaction,
-            student=member
+            student=student
         )
 
         await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {member.mention} archiviert")
+            interaction, env.success_response(f"Schüler {student.mention} archiviert")
         )
 
-    @stash.autocomplete('member_id')
+    @stash.autocomplete('student_id')
     async def stash_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, lambda m: env.is_student(m) and not env.is_member_archived(m)
@@ -151,22 +151,22 @@ class StudentsGroup(app_commands.Group):
         description="Unstashes a student on this server."
     )
     @app_commands.describe(
-        member_id="The member to pop"
+        student_id="The student to pop"
     )
     @app_commands.checks.has_role('Lehrer')
-    async def pop(self, interaction: discord.Interaction, member_id: str):
-        member = self._get_member(interaction, member_id)
+    async def pop(self, interaction: discord.Interaction, student_id: str):
+        student = self._get_member(interaction, student_id)
 
-        await student.pop_student(
+        await coord.pop_student(
             interaction=interaction,
-            student=member
+            student=student
         )
 
         await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {member.mention} wiederhergestellt")
+            interaction, env.success_response(f"Schüler {student.mention} wiederhergestellt")
         )
 
-    @pop.autocomplete('member_id')
+    @pop.autocomplete('student_id')
     async def pop_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, lambda m: env.is_student(m) and env.is_member_archived(m)
@@ -187,31 +187,31 @@ class StudentsGroup(app_commands.Group):
         description='Connects a member to an existing student.'
     )
     @app_commands.describe(
-        member_id='The student to connect to',
-        other_id='The member to connect to the student'
+        student_id='The student to connect to',
+        new_account_id='The member to connect to the student'
     )
     @app_commands.checks.has_role('Lehrer')
-    async def connect(self, interaction: discord.Interaction, member_id: str, other_id: str):
-        member = self._get_member(interaction, member_id)
-        other = self._get_member(interaction, other_id)
+    async def connect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
+        student = self._get_member(interaction, student_id)
+        new_account = self._get_member(interaction, new_account_id)
 
-        await student.connect_student(
+        await coord.connect_student(
             interaction=interaction,
-            student=member,
-            other_account=other
+            student=student,
+            other_account=new_account
         )
 
         await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {other.mention} mit {member.mention} verbunden")
+            interaction, env.success_response(f"Schüler {new_account.mention} mit {student.mention} verbunden")
         )
 
-    @connect.autocomplete('member_id')
+    @connect.autocomplete('student_id')
     async def connect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, env.is_student
         )
 
-    @connect.autocomplete('other_id')
+    @connect.autocomplete('new_account_id')
     async def connect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, lambda m: not env.is_assigned(m)
@@ -228,31 +228,31 @@ class StudentsGroup(app_commands.Group):
         description='Disconnects a member from an existing student.'
     )
     @app_commands.describe(
-        member_id='The student to disconnect from',
-        other_id='The member to disconnect from the student'
+        student_id='The student to disconnect from',
+        new_account_id='The member to disconnect from the student'
     )
     @app_commands.checks.has_role('Lehrer')
-    async def disconnect(self, interaction: discord.Interaction, member_id: str, other_id: str):
-        member = self._get_member(interaction, member_id)
-        other = self._get_member(interaction, other_id)
+    async def disconnect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
+        student = self._get_member(interaction, student_id)
+        new_account = self._get_member(interaction, new_account_id)
 
-        await student.disconnect_student(
+        await coord.disconnect_student(
             interaction=interaction,
-            student=member,
-            other_account=other
+            student=student,
+            other_account=new_account
         )
 
         await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {other.mention} von {member.mention} getrennt")
+            interaction, env.success_response(f"Schüler {new_account.mention} von {student.mention} getrennt")
         )
 
-    @disconnect.autocomplete('member_id')
+    @disconnect.autocomplete('student_id')
     async def disconnect_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, env.is_student
         )
 
-    @disconnect.autocomplete('other_id')
+    @disconnect.autocomplete('new_account_id')
     async def disconnect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return self._filter_members(
             interaction, current, env.is_student  # Could be done better, by filtering really only corresponding members / subusers
