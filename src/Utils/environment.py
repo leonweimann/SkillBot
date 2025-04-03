@@ -206,17 +206,26 @@ def generate_student_channel_name(student_name: str):
 
 # region Members
 
-def get_member(guild: discord.Guild, id: int) -> discord.Member:
+def get_member(guild: discord.Guild, id: int | str) -> discord.Member:
     """
     Retrieves the Discord member with the given ID from the given guild.
 
     Args:
         guild (discord.Guild): The Discord guild from which to retrieve the member.
-        id (int): The ID of the member to retrieve.
+        id (int | str): The ID of the member to retrieve. Can be an integer or a string.
 
     Returns:
         discord.Member: The member object corresponding to the ID in the guild.
+
+    Raises:
+        CodeError: If the ID is not a valid integer or if the member is not found in the guild.
     """
+    match id:
+        case str():
+            if not id.isdigit():
+                raise CodeError(f'ID {id} is not a valid integer')
+            id = int(id)
+
     if result := discord.utils.get(guild.members, id=id):
         return result
     raise CodeError(f'Member with ID {id} not found')
