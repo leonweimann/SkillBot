@@ -10,15 +10,6 @@ from Utils.errors import CodeError
 
 @app_commands.guild_only()
 class StudentsGroup(app_commands.Group):
-    @staticmethod
-    def _get_member(
-        interaction: discord.Interaction,
-        member_id: str
-    ) -> discord.Member:
-        if not interaction.guild:
-            raise CodeError("Guild not found")
-        return env.get_member(interaction.guild, member_id)
-
     # region Assignments
 
     @app_commands.command(
@@ -32,7 +23,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
-        member = self._get_member(interaction, member_id)
+        member = env.get_member(interaction, member_id)
 
         await coord.assign_student(
             interaction=interaction,
@@ -68,7 +59,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def unassign(self, interaction: discord.Interaction, student_id: str):
-        student = self._get_member(interaction, student_id)
+        student = env.get_member(interaction, student_id)
 
         await coord.unassign_student(
             interaction=interaction,
@@ -104,7 +95,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def stash(self, interaction: discord.Interaction, student_id: str):
-        student = self._get_member(interaction, student_id)
+        student = env.get_member(interaction, student_id)
 
         await coord.stash_student(
             interaction=interaction,
@@ -136,7 +127,7 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def pop(self, interaction: discord.Interaction, student_id: str):
-        student = self._get_member(interaction, student_id)
+        student = env.get_member(interaction, student_id)
 
         await coord.pop_student(
             interaction=interaction,
@@ -173,8 +164,8 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def connect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
-        student = self._get_member(interaction, student_id)
-        new_account = self._get_member(interaction, new_account_id)
+        student = env.get_member(interaction, student_id)
+        new_account = env.get_member(interaction, new_account_id)
 
         await coord.connect_student(
             interaction=interaction,
@@ -214,8 +205,8 @@ class StudentsGroup(app_commands.Group):
     )
     @app_commands.checks.has_role('Lehrer')
     async def disconnect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
-        student = self._get_member(interaction, student_id)
-        new_account = self._get_member(interaction, new_account_id)
+        student = env.get_member(interaction, student_id)
+        new_account = env.get_member(interaction, new_account_id)
 
         await coord.disconnect_student(
             interaction=interaction,
