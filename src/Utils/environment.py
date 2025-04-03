@@ -278,6 +278,20 @@ def filter_members_for_autocomplete(
     current: str,
     predicate: Callable[[discord.Member], bool]
 ) -> list[app_commands.Choice[str]]:
+    """
+    Filters the members of a Discord guild for use in an autocomplete context.
+
+    Args:
+        interaction (discord.Interaction): The interaction object containing the guild and its members.
+        current (str): The current input string to filter members by their display names.
+        predicate (Callable[[discord.Member], bool]): A callable that takes a discord.Member 
+            and returns a boolean indicating whether the member should be included.
+
+    Returns:
+        list[app_commands.Choice[str]]: A list of up to 25 app_commands.Choice objects, 
+        each representing a member whose display name matches the input criteria.
+        Returns an empty list if the interaction is not associated with a guild.
+    """
     if not interaction.guild:
         return []
 
