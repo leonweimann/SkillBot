@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
+import datetime
+import asyncio
 
 import Utils.environment as env
 from Utils.errors import CodeError
@@ -18,23 +20,19 @@ class AutoSorting(commands.Cog):
         if self.debug:
             print(f"[DEBUG] AutoSorting: {message}")
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        print(f'[COG] {self.__cog_name__} is ready')
-        self.auto_sort_channels.start()
-
     def cog_unload(self):
         """
         This method is called when the cog is unloaded.
         It stops the auto_sort_channels task.
-                """
-        self.auto_sort_channels.cancel()
-        self._debug_print('[COG] AutoSorting has been unloaded and auto_sort_channels stopped.')
+        """
+        if self.auto_sort_channels.is_running():
+            self.auto_sort_channels.cancel()
+            self._debug_print('[COG] AutoSorting has been unloaded and auto_sort_channels stopped.')
 
-    @tasks.loop(hours=1)
+    @tasks.loop(hours=24)
     async def auto_sort_channels(self):
         """
-        Automatically sorts channels every hour.
+        Automatically sorts channels once a day at 2am.
         """
         for guild in self.bot.guilds:
             self._debug_print(f'Running auto_sort_channels for guild: {guild.name}')
@@ -51,9 +49,26 @@ class AutoSorting(commands.Cog):
                     )
         self._debug_print('Finished auto_sort_channels loop.')
 
+    def _calculate_delay_until_2am(self) -> float:
+        """
+        Calculate the number of seconds until next 2am local time.
+        """
+        now = datetime.datetime.now()
+        target = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += datetime.timedelta(days=1)
+        return (target - now).total_seconds()
+
     @auto_sort_channels.before_loop
     async def before_auto_sort_channels(self):
-        await self.bot.wait_until_ready()
+        try:
+            seconds_until_target = self._calculate_delay_until_2am()
+            self._debug_print(f"Waiting {seconds_until_target:.0f} seconds until next 2am...")
+            await asyncio.sleep(seconds_until_target)
+            await self.bot.wait_until_ready()
+        except asyncio.CancelledError:
+            self._debug_print("before_auto_sort_channels was cancelled.")
+            raise
 
     @app_commands.command(
         name='do-auto-sort',
