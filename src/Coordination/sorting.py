@@ -78,4 +78,3 @@ class ChannelSortingCoordinator:
 
 
 channel_sorting_coordinator = ChannelSortingCoordinator()
-channel_sorting_coordinator.activate_debug_mode()
