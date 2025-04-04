@@ -23,9 +23,10 @@ async def on_ready():
 
 
 async def setup_hook():
-    for filename in os.listdir('./src/cogs'):
-        if filename.endswith('.py'):
-            await bot.load_extension(f'cogs.{filename[:-3]}')
+    for folder in ('cogs', 'cmds'):
+        for filename in os.listdir(f'./src/{folder}'):
+            if filename.endswith('.py'):
+                await bot.load_extension(f'{folder}.{filename[:-3]}')
 
     try:
         synced_commands = await bot.tree.sync()

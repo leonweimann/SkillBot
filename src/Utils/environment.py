@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Callable, Iterable
 
 import discord
 
@@ -145,6 +145,19 @@ def is_admin(member: discord.Member) -> bool:
     """
     return get_admin_role(member.guild) in member.roles
 
+
+def is_assigned(member: discord.Member) -> bool:
+    """
+    Checks if the given Discord member has any of the roles: 'Schüler', 'Lehrer', or 'Admin'.
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member has any of the specified roles, False otherwise.
+    """
+    return is_student(member) or is_teacher(member) or is_admin(member)
+
 # endregion
 
 
@@ -193,18 +206,33 @@ def generate_student_channel_name(student_name: str):
 
 # region Members
 
-def get_member(guild: discord.Guild, id: int) -> discord.Member:
+def get_member(source: discord.Guild | discord.Interaction, id: int | str) -> discord.Member:
     """
-    Retrieves the Discord member with the given ID from the given guild.
+    Retrieves the Discord member with the given ID from the given source.
 
     Args:
-        guild (discord.Guild): The Discord guild from which to retrieve the member.
-        id (int): The ID of the member to retrieve.
+        source (discord.Guild | discord.Interaction): The source from which to retrieve the member.
+            Can be a Discord guild or an interaction.
+        id (int | str): The ID of the member to retrieve. Can be an integer or a string.
 
     Returns:
-        discord.Member: The member object corresponding to the ID in the guild.
+        discord.Member: The member object corresponding to the ID in the source.
+
+    Raises:
+        CodeError: If the ID is not a valid integer, if the source does not contain a guild,
+            or if the member is not found in the source.
     """
-    if result := discord.utils.get(guild.members, id=id):
+    if isinstance(id, str):
+        if not id.isdigit():
+            raise CodeError(f'ID {id} is not a valid integer')
+        id = int(id)
+
+    if isinstance(source, discord.Interaction):
+        if not source.guild:
+            raise CodeError("Guild not found in the interaction")
+        source = source.guild
+
+    if result := discord.utils.get(source.members, id=id):
         return result
     raise CodeError(f'Member with ID {id} not found')
 
@@ -220,6 +248,79 @@ def generate_member_nick(db_member: User) -> str:
         str: The generated nickname
     """
     return f'{'🎓' if db_member.is_teacher else '🎒' if db_member.is_student else '👋'} {db_member.real_name}'
+
+
+def is_member_archived(member: discord.Member) -> bool:
+    """
+    Checks if the given Discord member is archived.
+
+    A member is archived if:
+    - For students: The teacher-student channel is in the archive category.
+    - For teachers: NOT IMPLEMENTED YET
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member is archived, False otherwise.
+    """
+    if is_student(member):
+        ts_con = TeacherStudentConnection.find_by_student(member.guild.id, member.id)
+        if ts_con:
+            channel = member.guild.get_channel(ts_con.channel_id)
+            if channel and channel.category and channel.category.id == get_archive_channel(member.guild).id:
+                return True
+    return False
+
+
+def is_teacher_student_connected(teacher: discord.Member, student: discord.Member) -> bool:
+    """
+    Checks if the given teacher and student are connected.
+
+    Args:
+        teacher (discord.Member): The Discord member representing the teacher.
+        student (discord.Member): The Discord member representing the student.
+
+    Returns:
+        bool: True if the teacher and student are connected, False otherwise.
+    """
+    ts_con = TeacherStudentConnection.find_by_student(student.guild.id, student.id)
+    if ts_con and ts_con.teacher_id == teacher.id:
+        return True
+    return False
+
+
+def filter_members_for_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+    predicate: Callable[[discord.Member], bool]
+) -> list[app_commands.Choice[str]]:
+    """
+    Filters the members of a Discord guild for use in an autocomplete context.
+
+    Args:
+        interaction (discord.Interaction): The interaction object containing the guild and its members.
+        current (str): The current input string to filter members by their display names.
+        predicate (Callable[[discord.Member], bool]): A callable that takes a discord.Member
+            and returns a boolean indicating whether the member should be included.
+
+    Returns:
+        list[app_commands.Choice[str]]: A list of up to 25 app_commands.Choice objects,
+        each representing a member whose display name matches the input criteria.
+        Returns an empty list if the interaction is not associated with a guild.
+    """
+    if not interaction.guild:
+        return []
+
+    filtered = (
+        member for member in interaction.guild.members
+        if predicate(member) and not member.bot and current.lower() in member.display_name.lower()
+    )
+
+    return [
+        app_commands.Choice(name=member.display_name, value=str(member.id))
+        for member in filtered
+    ][:25]
 
 # endregion
 

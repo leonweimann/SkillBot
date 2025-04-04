@@ -73,6 +73,13 @@ class DatabaseManager:
             ''')
             conn.commit()
 
+    @staticmethod
+    def get_all_teaching_categories(guild_id: int) -> list[int]:
+        with DatabaseManager._connect(guild_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT teaching_category FROM teachers')
+            return [int(row[0]) for row in cursor.fetchall()]
+
 # endregion
 
 
