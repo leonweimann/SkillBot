@@ -211,7 +211,7 @@ def get_member(source: discord.Guild | discord.Interaction, id: int | str) -> di
     Retrieves the Discord member with the given ID from the given source.
 
     Args:
-        source (discord.Guild | discord.Interaction): The source from which to retrieve the member. 
+        source (discord.Guild | discord.Interaction): The source from which to retrieve the member.
             Can be a Discord guild or an interaction.
         id (int | str): The ID of the member to retrieve. Can be an integer or a string.
 
@@ -219,7 +219,7 @@ def get_member(source: discord.Guild | discord.Interaction, id: int | str) -> di
         discord.Member: The member object corresponding to the ID in the source.
 
     Raises:
-        CodeError: If the ID is not a valid integer, if the source does not contain a guild, 
+        CodeError: If the ID is not a valid integer, if the source does not contain a guild,
             or if the member is not found in the source.
     """
     if isinstance(id, str):
@@ -273,6 +273,23 @@ def is_member_archived(member: discord.Member) -> bool:
     return False
 
 
+def is_teacher_student_connected(teacher: discord.Member, student: discord.Member) -> bool:
+    """
+    Checks if the given teacher and student are connected.
+
+    Args:
+        teacher (discord.Member): The Discord member representing the teacher.
+        student (discord.Member): The Discord member representing the student.
+
+    Returns:
+        bool: True if the teacher and student are connected, False otherwise.
+    """
+    ts_con = TeacherStudentConnection.find_by_student(student.guild.id, student.id)
+    if ts_con and ts_con.teacher_id == teacher.id:
+        return True
+    return False
+
+
 def filter_members_for_autocomplete(
     interaction: discord.Interaction,
     current: str,
@@ -284,11 +301,11 @@ def filter_members_for_autocomplete(
     Args:
         interaction (discord.Interaction): The interaction object containing the guild and its members.
         current (str): The current input string to filter members by their display names.
-        predicate (Callable[[discord.Member], bool]): A callable that takes a discord.Member 
+        predicate (Callable[[discord.Member], bool]): A callable that takes a discord.Member
             and returns a boolean indicating whether the member should be included.
 
     Returns:
-        list[app_commands.Choice[str]]: A list of up to 25 app_commands.Choice objects, 
+        list[app_commands.Choice[str]]: A list of up to 25 app_commands.Choice objects,
         each representing a member whose display name matches the input criteria.
         Returns an empty list if the interaction is not associated with a guild.
     """
