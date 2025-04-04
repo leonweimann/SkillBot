@@ -89,6 +89,22 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 # region Rename
 
 async def rename_teacher(interaction: discord.Interaction, teacher: discord.Member, new_name: str) -> str:
+    """
+    Renames a teacher in the system by updating their real name in the database, 
+    changing their nickname, and updating their associated category name.
+
+    Args:
+        interaction (discord.Interaction): The interaction object representing the command invocation.
+        teacher (discord.Member): The Discord member object representing the teacher to be renamed.
+        new_name (str): The new name to assign to the teacher.
+
+    Returns:
+        str: The old name of the teacher before the rename.
+
+    Raises:
+        CodeError: If the command is not used in a server, or the teacher does not have a name.
+        UsageError: If the user is not an admin or the specified member is not a teacher.
+    """
     if not interaction.guild:
         raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
