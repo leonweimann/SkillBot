@@ -314,6 +314,65 @@ async def disconnect_student(interaction: discord.Interaction, student: discord.
 
 # endregion
 
+# region Rename
+
+
+async def rename_student(interaction: discord.Interaction, student: discord.Member, new_name: str):
+    """
+    Asynchronously renames a student in the database and updates their nickname in Discord.
+
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        student (discord.Member): The student to be renamed.
+        new_name (str): The new name for the student.
+
+    Raises:
+        CodeError: If the command is not used in a server or if the student has no real name.
+        UsageError: If the user is not a teacher or if the student is not registered.
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+    if not isinstance(teacher := interaction.user, discord.Member):
+        raise CodeError("Dieser Befehl kann nur von Mitgliedern verwendet werden")
+
+    if not env.is_teacher(teacher):
+        raise UsageError(f"Du {teacher.mention} bist kein Lehrer")
+
+    if not env.is_student(student):
+        raise UsageError(f"{student.mention} ist kein registrierter Schüler")
+
+    ts_con = TeacherStudentConnection.find_by_student(interaction.guild.id, student.id)
+    if not ts_con:
+        raise CodeError(f"Schüler {student.id} hat keine Lehrer-Schüler-Verbindung gefunden")
+
+    if ts_con.teacher_id != teacher.id:
+        raise UsageError(f"{student.mention} ist nicht dein Schüler")
+
+    db_student = Student(interaction.guild.id, student.id)
+    if not db_student.real_name:
+        raise CodeError(f"Schüler {student.id} hat keinen echten Namen")
+
+    old_name = str(db_student.real_name)
+
+    # Rename student in database
+    db_student.edit(real_name=new_name)
+    # Update student's nickname in Discord
+    await student.edit(nick=env.generate_member_nick(db_student))
+    # Update channel name in Discord
+    if ts_con.channel_id:
+        student_channel = interaction.guild.get_channel(ts_con.channel_id)
+        if student_channel:
+            await student_channel.edit(name=env.generate_student_channel_name(new_name))
+        else:
+            await log(interaction.guild, f"Channel für {student.mention} nicht gefunden, sollte aber `{ts_con.channel_id}` sein")
+    else:
+        await log(interaction.guild, f"Channel für {student.mention} nicht gefunden, da keine Verbindung existiert")
+
+    return old_name
+
+# endregion
+
 
 # region Sorting
 

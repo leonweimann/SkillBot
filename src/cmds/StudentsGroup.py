@@ -241,6 +241,46 @@ class StudentsGroup(app_commands.Group):
 
     # endregion Connections
 
+    # region Rename
+
+    @app_commands.command(
+        name='rename',
+        description='Renames a student.'
+    )
+    @app_commands.describe(
+        student_id='The student to rename',
+        new_name='The new name of the student'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def rename(self, interaction: discord.Interaction, student_id: str, new_name: str):
+        student = env.get_member(interaction, student_id)
+
+        await interaction.response.defer(thinking=True)
+        old_name = await coord.rename_student(
+            interaction=interaction,
+            student=student,
+            new_name=new_name
+        )
+
+        await interaction.followup.send(
+            env.success_response(f"Schüler {student.mention} umbenannt (ehemals `{old_name}`)")
+        )
+
+    @rename.autocomplete('student_id')
+    async def rename_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return env.filter_members_for_autocomplete(
+            interaction, current,
+            lambda s: env.is_teacher_student_connected(t, s) if isinstance(t := interaction.user, discord.Member) else False
+        )
+
+    @rename.error
+    async def rename_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students rename", reqired_role="Lehrer"
+        )
+
+    # endregion Rename
+
     # region Sort
 
     @app_commands.command(
