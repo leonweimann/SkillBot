@@ -12,7 +12,7 @@ from Coordination.sorting import channel_sorting_coordinator
 class AutoSorting(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.debug = True  # Set to True to enable debug mode
+        self.debug = False  # Set to True to enable debug mode
 
     def _debug_print(self, message: str):
         if self.debug:
