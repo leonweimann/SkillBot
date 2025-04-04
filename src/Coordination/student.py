@@ -317,7 +317,7 @@ async def disconnect_student(interaction: discord.Interaction, student: discord.
 # region Rename
 
 
-async def rename_student(interaction: discord.Interaction, student: discord.Member, new_name: str):
+async def rename_student(interaction: discord.Interaction, student: discord.Member, new_name: str) -> str:
     """
     Asynchronously renames a student in the database and updates their nickname in Discord.
 
