@@ -4,8 +4,6 @@ from discord import app_commands
 import Utils.environment as env
 import Coordination.student as coord
 
-from Coordination.sorting import channel_sorting_coordinator
-
 
 @app_commands.guild_only()
 class StudentsGroup(app_commands.Group):
@@ -266,6 +264,14 @@ class StudentsGroup(app_commands.Group):
         await interaction.followup.send(
             env.success_response("Kanäle sortiert")
         )
+
+    @sort.error
+    async def sort_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="students sort", reqired_role="Lehrer"
+        )
+
+    # endregion Sort
 
 
 async def setup(bot):
