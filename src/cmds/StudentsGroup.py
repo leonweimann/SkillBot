@@ -11,12 +11,12 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name="assign",
-        description="Assigns a new student on this server."
+        description="Weist einen neuen Schüler diesem Server zu."
     )
     @app_commands.describe(
-        member_id="The member to assign",
-        real_name="The real name of the student",
-        customer_id="The customer ID of the student"
+        member_id="Das Mitglied, das zugewiesen werden soll",
+        real_name="Der richtige Name des Schülers",
+        customer_id="Die Kunden-ID des Schülers"
     )
     @app_commands.checks.has_role('Lehrer')
     async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
@@ -50,10 +50,10 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name="unassign",
-        description="Unassigns a student on this server."
+        description="Meldet einen Schüler von diesem Server ab."
     )
     @app_commands.describe(
-        student_id="The student to unassign"
+        student_id="Der Schüler, der abgemeldet werden soll"
     )
     @app_commands.checks.has_role('Lehrer')
     async def unassign(self, interaction: discord.Interaction, student_id: str):
@@ -87,10 +87,10 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name="stash",
-        description="Stashes a student on this server."
+        description="Archiviert einen Schüler auf diesem Server."
     )
     @app_commands.describe(
-        student_id="The student to stash"
+        student_id="Der Schüler, der archiviert werden soll"
     )
     @app_commands.checks.has_role('Lehrer')
     async def stash(self, interaction: discord.Interaction, student_id: str):
@@ -120,10 +120,10 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name="pop",
-        description="Unstashes a student on this server."
+        description="Stellt einen archivierten Schüler wieder her."
     )
     @app_commands.describe(
-        student_id="The student to pop"
+        student_id="Der Schüler, der wiederhergestellt werden soll"
     )
     @app_commands.checks.has_role('Lehrer')
     async def pop(self, interaction: discord.Interaction, student_id: str):
@@ -157,11 +157,11 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name='connect',
-        description='Connects a member to an existing student.'
+        description='Verbindet ein Mitglied mit einem bestehenden Schüler.'
     )
     @app_commands.describe(
-        student_id='The student to connect to',
-        new_account_id='The member to connect to the student'
+        student_id='Der Schüler, mit dem verbunden werden soll',
+        new_account_id='Das Mitglied, das mit dem Schüler verbunden werden soll'
     )
     @app_commands.checks.has_role('Lehrer')
     async def connect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
@@ -199,11 +199,11 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name='disconnect',
-        description='Disconnects a member from an existing student.'
+        description='Trennt ein Mitglied von einem bestehenden Schüler.'
     )
     @app_commands.describe(
-        student_id='The student to disconnect from',
-        new_account_id='The member to disconnect from the student'
+        student_id='Der Schüler, von dem getrennt werden soll',
+        new_account_id='Das Mitglied, das getrennt werden soll'
     )
     @app_commands.checks.has_role('Lehrer')
     async def disconnect(self, interaction: discord.Interaction, student_id: str, new_account_id: str):
@@ -245,11 +245,11 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name='rename',
-        description='Renames a student.'
+        description='Benennt einen Schüler um.'
     )
     @app_commands.describe(
-        student_id='The student to rename',
-        new_name='The new name of the student'
+        student_id='Der Schüler, der umbenannt werden soll',
+        new_name='Der neue Name des Schülers'
     )
     @app_commands.checks.has_role('Lehrer')
     async def rename(self, interaction: discord.Interaction, student_id: str, new_name: str):
@@ -285,13 +285,13 @@ class StudentsGroup(app_commands.Group):
 
     @app_commands.command(
         name='sort',
-        description='Sorts the channels in the teachers category.'
+        description='Sortiert die Kanäle in der Lehrerkategorie.'
     )
     @app_commands.checks.has_role('Lehrer')
     async def sort(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message(
-                env.failure_response('Dieser kann nur von einem Lehrer ausgeführt werden')
+                env.failure_response('Dieser Befehl kann nur von einem Lehrer ausgeführt werden')
             )
             return
 
@@ -318,7 +318,7 @@ async def setup(bot):
     bot.tree.add_command(
         StudentsGroup(
             name="students",
-            description="Commands for students"
+            description="Befehle für Schüler"
         )
     )
     print('[Group] StudentsGroup loaded')
