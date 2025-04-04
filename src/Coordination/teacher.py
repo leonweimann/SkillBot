@@ -86,38 +86,39 @@ async def unassign_teacher(interaction: discord.Interaction, teacher: discord.Me
 # endregion
 
 
-# region Sort Channels
+# region Rename
 
+async def rename_teacher(interaction: discord.Interaction, teacher: discord.Member, new_name: str) -> str:
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
 
-# TODO: Fix sorting - doesn't work properly
-async def sort_channels(channel: discord.abc.GuildChannel):
-    """
-    Sortiert Channels in einer Kategorie, die '🎓' im Namen trägt.
-    Der 'cmd'-Channel bleibt immer an erster Stelle.
-    """
-    # Prüfe, ob der Channel zu einer relevanten Kategorie gehört
-    if channel.category and ('🎓' in channel.category.name or env.get_archive_channel(channel.guild)):
-        channels = channel.category.channels
-        cmd_channel = next((c for c in channels if c.name == 'cmd'), None)
-        other_channels = sorted((c for c in channels if c.name != 'cmd'), key=lambda c: c.name.lower())
+    if not isinstance(interaction.user, discord.Member):
+        raise CodeError("Dieser Befehl kann nur von einem Mitglied verwendet werden")
 
-        tasks = []
-        position = 0
+    if not env.is_admin(interaction.user):
+        raise UsageError("Du bist kein Admin")
 
-        # Setze 'cmd' immer an die erste Stelle, falls vorhanden
-        if cmd_channel:
-            if cmd_channel.position != 0:
-                tasks.append(cmd_channel.edit(position=0))
-            position = 1
+    if not env.is_teacher(teacher):
+        raise UsageError(f"{teacher.mention} ist kein Lehrer")
 
-        # Setze die restlichen Channels in sortierter Reihenfolge
-        for c in other_channels:
-            if c.position != position:
-                tasks.append(c.edit(position=position))
-            position += 1
+    # Get teacher from db
+    db_teacher = Teacher(interaction.guild.id, teacher.id)
+    if not db_teacher.real_name:
+        raise CodeError(f"{teacher.mention} hat keinen Namen")
 
-        # Starte alle Änderungen parallel
-        if tasks:
-            await asyncio.gather(*tasks)
+    old_name = str(db_teacher.real_name)
+
+    # Rename teacher in database
+    db_teacher.edit(real_name=new_name)
+    # Update teacher nickname
+    await teacher.edit(nick=env.generate_member_nick(db_teacher))
+    # Update teacher category name
+    if teacher_category := discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category):
+        await teacher_category.edit(name=env.generate_member_nick(db_teacher))
+    else:
+        await log(interaction.guild, f"Lehrer {teacher.mention} hat keine Kategorie", details={'Teacher': f'{teacher.mention}'})
+
+    return old_name
+
 
 # endregion
