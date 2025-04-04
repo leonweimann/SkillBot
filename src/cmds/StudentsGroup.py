@@ -4,6 +4,8 @@ from discord import app_commands
 import Utils.environment as env
 import Coordination.student as coord
 
+from Coordination.sorting import channel_sorting_coordinator
+
 
 @app_commands.guild_only()
 class StudentsGroup(app_commands.Group):
@@ -22,6 +24,7 @@ class StudentsGroup(app_commands.Group):
     async def assign(self, interaction: discord.Interaction, member_id: str, real_name: str, customer_id: int):
         member = env.get_member(interaction, member_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.assign_student(
             interaction=interaction,
             student=member,
@@ -31,8 +34,8 @@ class StudentsGroup(app_commands.Group):
             silent=False
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {member.mention} registriert")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {member.mention} registriert")
         )
 
     @assign.autocomplete('member_id')
@@ -58,13 +61,14 @@ class StudentsGroup(app_commands.Group):
     async def unassign(self, interaction: discord.Interaction, student_id: str):
         student = env.get_member(interaction, student_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.unassign_student(
             interaction=interaction,
             student=student
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {student.mention} abgemeldet")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {student.mention} abgemeldet")
         )
 
     @unassign.autocomplete('student_id')
@@ -94,19 +98,20 @@ class StudentsGroup(app_commands.Group):
     async def stash(self, interaction: discord.Interaction, student_id: str):
         student = env.get_member(interaction, student_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.stash_student(
             interaction=interaction,
             student=student
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {student.mention} archiviert")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {student.mention} archiviert")
         )
 
     @stash.autocomplete('student_id')
     async def stash_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return env.filter_members_for_autocomplete(
-            interaction, current, lambda m: env.is_student(m) and not env.is_member_archived(m)
+            interaction, current, lambda m: env.is_student(m) and not env.is_member_archived(m)  # Doesn't work as expected
         )
 
     @stash.error
@@ -126,13 +131,14 @@ class StudentsGroup(app_commands.Group):
     async def pop(self, interaction: discord.Interaction, student_id: str):
         student = env.get_member(interaction, student_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.pop_student(
             interaction=interaction,
             student=student
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {student.mention} wiederhergestellt")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {student.mention} wiederhergestellt")
         )
 
     @pop.autocomplete('student_id')
@@ -164,14 +170,15 @@ class StudentsGroup(app_commands.Group):
         student = env.get_member(interaction, student_id)
         new_account = env.get_member(interaction, new_account_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.connect_student(
             interaction=interaction,
             student=student,
             other_account=new_account
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {new_account.mention} mit {student.mention} verbunden")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {new_account.mention} mit {student.mention} verbunden")
         )
 
     @connect.autocomplete('student_id')
@@ -205,14 +212,15 @@ class StudentsGroup(app_commands.Group):
         student = env.get_member(interaction, student_id)
         new_account = env.get_member(interaction, new_account_id)
 
+        await interaction.response.defer(thinking=True)
         await coord.disconnect_student(
             interaction=interaction,
             student=student,
             other_account=new_account
         )
 
-        await env.send_safe_response(
-            interaction, env.success_response(f"Schüler {new_account.mention} von {student.mention} getrennt")
+        await interaction.followup.send(
+            env.success_response(f"Schüler {new_account.mention} von {student.mention} getrennt")
         )
 
     @disconnect.autocomplete('student_id')
@@ -234,6 +242,30 @@ class StudentsGroup(app_commands.Group):
         )
 
     # endregion Connections
+
+    # region Sort
+
+    @app_commands.command(
+        name='sort',
+        description='Sorts the channels in the teachers category.'
+    )
+    @app_commands.checks.has_role('Lehrer')
+    async def sort(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                env.failure_response('Dieser kann nur von einem Lehrer ausgeführt werden')
+            )
+            return
+
+        await interaction.response.defer(thinking=True)
+        await coord.sort_channels(
+            interaction=interaction,
+            teacher=interaction.user
+        )
+
+        await interaction.followup.send(
+            env.success_response("Kanäle sortiert")
+        )
 
 
 async def setup(bot):

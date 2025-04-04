@@ -1,6 +1,7 @@
 import discord
 
 import Utils.environment as env
+from Coordination.sorting import channel_sorting_coordinator
 
 from Utils.database import *
 from Utils.errors import *
@@ -310,5 +311,36 @@ async def disconnect_student(interaction: discord.Interaction, student: discord.
     await student_channel.set_permissions(other_account, overwrite=None)
     await other_account.edit(nick=None)
     await other_account.remove_roles(env.get_student_role(interaction.guild))
+
+# endregion
+
+
+# region Sorting
+
+async def sort_channels(interaction: discord.Interaction, teacher: discord.Member):
+    """
+    Asynchronously sorts the channels in the teacher's category.
+    This function retrieves the teacher's category from the database and sorts the channels within it.
+    Args:
+        interaction (discord.Interaction): The interaction that triggered the command.
+        teacher (discord.Member): The teacher who invoked the command.
+    Raises:
+        CodeError: If the command is not used in a server or if the teacher has no category.
+    """
+    if not interaction.guild:
+        raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+    if not isinstance(teacher, discord.Member):
+        raise CodeError("Dieser Befehl kann nur von Mitgliedern verwendet werden")
+
+    db_teacher = Teacher(interaction.guild.id, teacher.id)
+    if not db_teacher.teaching_category:
+        raise CodeError(f"Lehrer {teacher.mention} hat keine Kategorie")
+
+    teachers_category = discord.utils.get(interaction.guild.categories, id=db_teacher.teaching_category)
+    if not teachers_category:
+        raise CodeError(f"Lehrer {teacher.mention} hat keine Kategorie")
+
+    await channel_sorting_coordinator.sort_channels_in_category(teachers_category)
 
 # endregion
