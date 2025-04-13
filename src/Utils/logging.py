@@ -18,7 +18,7 @@ async def log(guild: discord.Guild, message: str, details: dict[str, str] = {}):
     if details:
         max_key_length = max(len(key) for key in details.keys())
         for key, value in details.items():
-            msg += f'{key}{" " * (max_key_length - len(key))} | {value if value != '' else 'None'}\n'
+            msg += f'{key}{" " * (max_key_length - len(key))} | {value if value != '' else "\'\'"}\n'
     msg += '```'
     msg += f'\n{"-" * 20}'
     await logs_channel.send(msg)
