@@ -17,7 +17,7 @@ class AutoSorting(commands.Cog):
 
     def _debug_print(self, message: str):
         if self.debug:
-            print(f"[DEBUG] AutoSorting: {message}")
+            print(f'[DEBUG] {self.__class__.__name__}: {message}')
 
     @commands.Cog.listener()
     async def on_ready(self):
