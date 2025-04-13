@@ -19,6 +19,15 @@ class AutoSorting(commands.Cog):
         if self.debug:
             print(f"[DEBUG] AutoSorting: {message}")
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """
+        Event listener that runs when the bot is ready.
+        Starts the auto_sort_channels task.
+        """
+        print(f'[COG] {self.__class__.__name__} is ready')
+        self.auto_sort_channels.start()
+
     @tasks.loop(time=time(0, 0, tzinfo=timezone.utc))
     async def auto_sort_channels(self):
         """
