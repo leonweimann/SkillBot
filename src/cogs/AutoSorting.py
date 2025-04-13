@@ -146,6 +146,13 @@ class AutoSorting(commands.Cog):
             self._debug_print('Auto-sorting has been started.')
             await log(interaction.guild, '[COMMAND] toggle-auto-sort: Auto-sorting has been started.')
 
+    @toggle_auto_sort.error
+    async def toggle_auto_sort_error(self, interaction: discord.Interaction, error):
+        if interaction.guild:
+            await log(interaction.guild, '[COMMAND] toggle-auto-sort: Error occurred', {"error": str(error)})
+        self._debug_print(f'Error in toggle_auto_sort command: {error}')
+        await env.handle_app_command_error(interaction, error, 'toggle-auto-sort', 'Admin')
+
 
 async def setup(bot):
     await bot.add_cog(AutoSorting(bot))
