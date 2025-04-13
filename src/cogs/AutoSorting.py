@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from datetime import time, timezone
+from datetime import time, timezone, datetime  # TODO: remove datetime
 
 import Utils.environment as env
 from Utils.errors import CodeError
@@ -34,6 +34,8 @@ class AutoSorting(commands.Cog):
         Automatically sorts all channels using the channel_sorting_coordinator.
         This task is scheduled to run at midnight UTC (2 AM German time).
         """
+        print(f'[COG] AutoSorting: Running auto_sort_channels task ({datetime.now()})')  # TODO: Remove
+
         for guild in self.bot.guilds:
             self._debug_print(f'Running auto_sort_channels for guild: {guild.name}')
             for category in guild.categories:
