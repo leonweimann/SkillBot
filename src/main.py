@@ -25,7 +25,7 @@ async def on_ready():
 
     # Create database tables for all guilds
     for guild in bot.guilds:
-        print(f'Creating tables for guild: {guild.name}')
+        print(f'[DB] Creating tables for guild: {guild.name}, ID: {guild.id}')
         DatabaseManager.create_tables(guild.id)
 
 
@@ -55,7 +55,17 @@ def get_discord_token() -> str:
 
 async def main():
     async with bot:
-        await bot.start(get_discord_token())
+        try:
+            await bot.start(get_discord_token())
+        except discord.LoginFailure:
+            print("🔴 Invalid token. Please check your DISCORD_TOKEN environment variable.")
+            return
+        except discord.HTTPException as e:
+            print(f"🔴 Failed to connect to Discord: {e}")
+            return
+        except Exception as e:
+            print(f"🔴 An unexpected error occurred: {e}")
+            return
 
 
 asyncio.run(main())
