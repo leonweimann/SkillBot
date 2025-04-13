@@ -18,10 +18,11 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 @bot.event
 async def on_ready():
-    print('\n\n')
+    print()
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     print(f'Logged in as {bot.user}')
-    print('------' + '\n\n')
+    print('------')
+    print()
 
     # Create database tables for all guilds
     for guild in bot.guilds:
