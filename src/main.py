@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 import asyncio
@@ -8,13 +9,19 @@ import asyncio
 from Utils.database import DatabaseManager
 
 
+if __name__ != '__main__':
+    raise RuntimeError('This file is not meant to be imported. Please run it directly.')
+
+
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 
 @bot.event
 async def on_ready():
+    print('\n\n')
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     print(f'Logged in as {bot.user}')
-    print('------')
+    print('------' + '\n\n')
 
     # Create database tables for all guilds
     for guild in bot.guilds:
