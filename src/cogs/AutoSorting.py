@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from datetime import time, timezone, datetime  # TODO: remove datetime
+from datetime import time, timezone
 
 import Utils.environment as env
 from Utils.errors import CodeError
@@ -34,8 +34,6 @@ class AutoSorting(commands.Cog):
         Automatically sorts all channels using the channel_sorting_coordinator.
         This task is scheduled to run at midnight UTC (2 AM German time).
         """
-        print(f'[COG] AutoSorting: Running auto_sort_channels task ({datetime.now()})')  # TODO: Remove
-
         for guild in self.bot.guilds:
             self._debug_print(f'Running auto_sort_channels for guild: {guild.name}')
             for category in guild.categories:
@@ -103,36 +101,6 @@ class AutoSorting(commands.Cog):
             await log(interaction.guild, '[COMMAND] do-auto-sort: Error occurred', {"error": str(error)})
         self._debug_print(f'Error in do_auto_sort command: {error}')
         await env.handle_app_command_error(interaction, error, 'do-auto-sort', 'Admin')
-
-    # @app_commands.command(
-    #     name='toggle-auto-sort',
-    #     description='Toggles the auto-sorting task on or off.'
-    # )
-    # @app_commands.checks.has_role('Admin')
-    # async def toggle_auto_sort(self, interaction: discord.Interaction):
-    #     """
-    #     Toggles the auto-sorting task on or off.
-    #     """
-    #     if not interaction.guild:
-    #         raise CodeError('This command can only be used in a guild.')
-
-    #     if self.auto_sort_channels.is_running():
-    #         self.auto_sort_channels.cancel()
-    #         await interaction.response.send_message(env.success_response('Auto-sorting has been stopped.'))
-    #         self._debug_print('Auto-sorting has been stopped.')
-    #         await log(interaction.guild, '[COMMAND] toggle-auto-sort: Auto-sorting has been stopped.')
-    #     else:
-    #         self.auto_sort_channels.start()
-    #         await interaction.response.send_message(env.success_response('Auto-sorting has been started.'))
-    #         self._debug_print('Auto-sorting has been started.')
-    #         await log(interaction.guild, '[COMMAND] toggle-auto-sort: Auto-sorting has been started.')
-
-    # @toggle_auto_sort.error
-    # async def toggle_auto_sort_error(self, interaction: discord.Interaction, error):
-    #     if interaction.guild:
-    #         await log(interaction.guild, '[COMMAND] toggle-auto-sort: Error occurred', {"error": str(error)})
-    #     self._debug_print(f'Error in toggle_auto_sort command: {error}')
-    #     await env.handle_app_command_error(interaction, error, 'toggle-auto-sort', 'Admin')
 
 
 async def setup(bot):
