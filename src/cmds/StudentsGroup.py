@@ -230,7 +230,7 @@ class StudentsGroup(app_commands.Group):
     @disconnect.autocomplete('new_account_id')
     async def disconnect_other_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return env.filter_members_for_autocomplete(
-            interaction, current, env.is_student  # Could be done better, by filtering really only corresponding members / subusers
+            interaction, current, lambda m: env.is_student(m) and env.is_subuser(m), hideSubmembers=False
         )
 
     @disconnect.error
@@ -270,7 +270,8 @@ class StudentsGroup(app_commands.Group):
     async def rename_member_id_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return env.filter_members_for_autocomplete(
             interaction, current,
-            lambda s: env.is_teacher_student_connected(t, s) if isinstance(t := interaction.user, discord.Member) else False
+            lambda s: env.is_teacher_student_connected(t, s) if isinstance(t := interaction.user, discord.Member) else False,
+            hideSubmembers=False
         )
 
     @rename.error

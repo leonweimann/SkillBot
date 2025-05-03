@@ -290,10 +290,45 @@ def is_teacher_student_connected(teacher: discord.Member, student: discord.Membe
     return False
 
 
+# TODO: Couldn't be used where it was intended to be used
+def is_subuser_connected(subuser: discord.Member, main_user: discord.Member) -> bool:
+    """
+    Checks if the given subuser is connected to the main user.
+
+    If the passed subuser is not a subuser, the function returns False.
+
+    Args:
+        subuser (discord.Member): The Discord member representing the subuser.
+        main_user (discord.Member): The Discord member representing the main user.
+
+    Returns:
+        bool: True if the subuser is connected to the main user, False otherwise.
+    """
+
+    expected_main_user = Subuser.get_user_of_subuser(subuser.guild.id, subuser.id)
+    if expected_main_user and expected_main_user.id == main_user.id:
+        return True
+    return False
+
+
+def is_subuser(member: discord.Member) -> bool:
+    """
+    Checks if the given member is a subuser.
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member is a subuser, False otherwise.
+    """
+    return Subuser.is_any_subuser(member.guild.id, member.id)
+
+
 def filter_members_for_autocomplete(
     interaction: discord.Interaction,
     current: str,
-    predicate: Callable[[discord.Member], bool]
+    predicate: Callable[[discord.Member], bool],
+    hideSubmembers: bool = True
 ) -> list[app_commands.Choice[str]]:
     """
     Filters the members of a Discord guild for use in an autocomplete context.
@@ -314,7 +349,9 @@ def filter_members_for_autocomplete(
 
     filtered = (
         member for member in interaction.guild.members
-        if predicate(member) and not member.bot and current.lower() in member.display_name.lower()
+        if predicate(member) and not member.bot
+        and current.lower() in member.display_name.lower()
+        and (not hideSubmembers or not is_subuser(member))
     )
 
     return [
