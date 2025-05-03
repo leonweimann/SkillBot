@@ -181,6 +181,13 @@ class Subuser(User):
                 return User(guild_id, row[0])
             return None
 
+    @staticmethod
+    def is_any_subuser(guild_id: int, subuser_id: int) -> bool:
+        with DatabaseManager._connect(guild_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM subusers WHERE subuser_id = ?', (subuser_id,))
+            return cursor.fetchone() is not None
+
 # endregion
 
 

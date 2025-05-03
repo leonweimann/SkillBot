@@ -271,6 +271,8 @@ async def connect_student(interaction: discord.Interaction, student: discord.Mem
     if not student_channel:
         raise CodeError(f"Channel für Schüler {student.id} nicht gefunden")
 
+    Subuser(interaction.guild.id, student.id, other_account.id).save()
+
     await student_channel.set_permissions(other_account, read_messages=True, send_messages=True)
     await other_account.edit(nick=f'{student.nick} ({other_account.display_name})')
     await other_account.add_roles(env.get_student_role(interaction.guild))
@@ -307,6 +309,8 @@ async def disconnect_student(interaction: discord.Interaction, student: discord.
     student_channel = interaction.guild.get_channel(ts_con.channel_id)
     if not student_channel:
         raise CodeError(f"Channel für Schüler {student.id} nicht gefunden")
+
+    Subuser(interaction.guild.id, student.id, other_account.id).delete()
 
     await student_channel.set_permissions(other_account, overwrite=None)
     await other_account.edit(nick=None)
