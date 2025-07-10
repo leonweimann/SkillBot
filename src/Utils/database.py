@@ -71,6 +71,12 @@ class DatabaseManager:
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS archive (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE
+                )
+            ''')
             conn.commit()
 
     @staticmethod
@@ -397,6 +403,65 @@ class UserVoiceChannelJoin:
                 cursor.execute('UPDATE users SET hours_in_class = hours_in_class + ? WHERE id = ?', (time_in_class, user_id))
                 cursor.execute('DELETE FROM user_voice_channel_join WHERE user_id = ?', (user_id,))
             conn.commit()
+
+# endregion
+
+
+# region Archive
+
+class Archive:
+    def __init__(self, guild_id: int, id: int):
+        self.guild_id = guild_id
+        self.id = id
+        self.name = None
+        self.load()
+
+    def load(self):
+        with DatabaseManager._connect(self.guild_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM archive WHERE id = ?', (self.id,))
+            archive = cursor.fetchone()
+            if archive:
+                self.id, self.name = archive[0], archive[1]
+            else:
+                self.id, self.name = None, None
+
+    def save(self):
+        with DatabaseManager._connect(self.guild_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO archive (id, name)
+                VALUES (?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                name = excluded.name
+            ''', (self.id, self.name))
+            conn.commit()
+
+    def edit(self, id: int | None = None, name: str | None = None):
+        if id is not None:
+            self.id = id
+        if name is not None:
+            self.name = name
+        self.save()
+
+    # @staticmethod
+    # def create_new(guild_id: int, id: int, name: str) -> 'Archive':
+    #     with DatabaseManager._connect(guild_id) as conn:
+    #         cursor = conn.cursor()
+    #         cursor.execute('''
+    #             INSERT INTO archive (id, name)
+    #             VALUES (?, ?)
+    #             ON CONFLICT (id) DO NOTHING
+    #         ''', (id, name))
+    #         conn.commit()
+    #         return Archive(guild_id, id)
+
+    @staticmethod
+    def get_all(guild_id: int) -> 'list[Archive]':
+        with DatabaseManager._connect(guild_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM archive')
+            return [Archive(guild_id, row[0]) for row in cursor.fetchall()]
 
 # endregion
 
