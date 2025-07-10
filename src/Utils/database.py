@@ -444,18 +444,6 @@ class Archive:
             self.name = name
         self.save()
 
-    # @staticmethod
-    # def create_new(guild_id: int, id: int, name: str) -> 'Archive':
-    #     with DatabaseManager._connect(guild_id) as conn:
-    #         cursor = conn.cursor()
-    #         cursor.execute('''
-    #             INSERT INTO archive (id, name)
-    #             VALUES (?, ?)
-    #             ON CONFLICT (id) DO NOTHING
-    #         ''', (id, name))
-    #         conn.commit()
-    #         return Archive(guild_id, id)
-
     @staticmethod
     def get_all(guild_id: int) -> 'list[Archive]':
         with DatabaseManager._connect(guild_id) as conn:
