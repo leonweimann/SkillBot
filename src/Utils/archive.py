@@ -64,7 +64,7 @@ class ArchiveCategory:
         appending a count if necessary to ensure uniqueness.
 
         Args:
-            guild_id (int): The ID of the Discord guild for which to generate the name. 
+            guild_id (int): The ID of the Discord guild for which to generate the name.
 
         Returns:
             str: A unique name for the archive category.
