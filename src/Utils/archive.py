@@ -1,3 +1,5 @@
+from typing import Iterator
+
 import discord
 
 from database import Archive
@@ -146,6 +148,25 @@ class ArchiveCategory:
             db_archive = Archive(guild.id, new_category.id)
             db_archive.edit(name=name)
         return new_category
+
+    @staticmethod
+    def get_all(guild: discord.Guild) -> 'Iterator[ArchiveCategory]':
+        """
+        Retrieves all archive categories for the specified guild.
+
+        This static method fetches all archive categories from the database and returns them as a list
+        of ArchiveCategory instances.
+
+        Args:
+            guild_id (int): The ID of the Discord guild for which to retrieve archive categories.
+
+        Returns:
+            list[ArchiveCategory]: A list of ArchiveCategory instances for the specified guild.
+        """
+        for db_archive in Archive.get_all(guild.id):
+            category = discord.utils.get(guild.categories, id=db_archive.id)
+            if category:
+                yield ArchiveCategory(guild, category)
 
     async def can_add(self, channel: discord.TextChannel) -> bool:
         """
