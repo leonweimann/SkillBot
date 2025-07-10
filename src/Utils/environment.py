@@ -282,10 +282,15 @@ async def is_member_archived(member: discord.Member) -> bool:
     """
     if is_student(member):
         ts_con = TeacherStudentConnection.find_by_student(member.guild.id, member.id)
-        if ts_con:
-            channel = member.guild.get_channel(ts_con.channel_id)
-            archive_channel = await get_archive_channel(member.guild)
-            if channel and channel.category and channel.category.id == archive_channel.id:
+        if not ts_con:
+            return False
+
+        channel = member.guild.get_channel(ts_con.channel_id)
+        if not (channel and channel.category):
+            return False
+
+        for archive in ArchiveCategory.get_all(member.guild):
+            if channel in archive.category.channels:
                 return True
     return False
 
