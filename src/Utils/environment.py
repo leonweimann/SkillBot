@@ -4,7 +4,7 @@ import discord
 
 from Utils.database import *
 from Utils.errors import *
-from Utils.logging import log
+from Utils.lwlogging import log
 
 
 # region Helpers
