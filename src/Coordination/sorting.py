@@ -1,7 +1,7 @@
 import discord
 
+from Utils.archive import ArchiveCategory
 import Utils.database as db
-import Utils.environment as env
 
 
 class ChannelSortingCoordinator:
@@ -22,12 +22,13 @@ class ChannelSortingCoordinator:
             print(f'[ChannelSortingManager] {message}')
 
     @staticmethod
-    async def _is_allowed_category(category: discord.CategoryChannel) -> bool:
+    def _is_allowed_category(category: discord.CategoryChannel) -> bool:
         """
         Check if the channel is allowed to be sorted.
         """
         allowed_categories_ids = db.DatabaseManager.get_all_teaching_categories(category.guild.id)
-        allowed_categories_ids.append((await env.get_archive_channel(category.guild)).id)
+        for archive in ArchiveCategory.get_all(category.guild):
+            allowed_categories_ids.append(archive.id)
 
         return category.id in allowed_categories_ids
 
@@ -54,7 +55,7 @@ class ChannelSortingCoordinator:
         Note:
             This method is asynchronous and should be awaited when called.
         """
-        if not await self._is_allowed_category(category):
+        if not self._is_allowed_category(category):
             self._debug_log(f'Skipping sorting for category {category.name} ({category.id})')
             return
 
