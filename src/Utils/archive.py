@@ -38,9 +38,9 @@ class ArchiveCategory:
         """
 
     @classmethod
-    async def create(cls, guild: discord.Guild) -> 'ArchiveCategory':
+    async def make(cls, guild: discord.Guild) -> 'ArchiveCategory':
         """
-        Creates an ArchiveCategory instance for the specified guild.
+        Makes an ArchiveCategory instance for the specified guild.
 
         This class method retrieves the current archive category for the guild.
         If there is no existing archive category, it creates a new one.
@@ -114,7 +114,7 @@ class ArchiveCategory:
         all_archives = Archive.get_all(guild.id)
         for archive in all_archives:
             category = discord.utils.get(guild.categories, id=archive.id)
-            if category and len(category.channels) <= _MAX_CHANNELS:
+            if category and len(category.channels) < _MAX_CHANNELS:
                 return category
 
         # If no suitable archive category is found, create a new one
@@ -178,7 +178,13 @@ class ArchiveCategory:
         if self.can_add(channel):
             await channel.edit(category=self.category)
         else:
-            raise CodeError("Channel is already in the archive category or the category is full.")
+            # Create new archive and add the channel there
+            new_archive = await ArchiveCategory.make(self.guild)
+            if new_archive.can_add(channel):
+                await channel.edit(category=new_archive.category)
+            else:
+                raise CodeError(f"Cannot add channel {channel.name} to archive category {self.category.name}. "
+                                "Either the channel is already in the archive or the archive is full.")
 
 
 # if __name__ == "__main__":

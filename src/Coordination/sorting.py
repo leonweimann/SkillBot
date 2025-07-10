@@ -22,12 +22,12 @@ class ChannelSortingCoordinator:
             print(f'[ChannelSortingManager] {message}')
 
     @staticmethod
-    def _is_allowed_category(category: discord.CategoryChannel) -> bool:
+    async def _is_allowed_category(category: discord.CategoryChannel) -> bool:
         """
         Check if the channel is allowed to be sorted.
         """
         allowed_categories_ids = db.DatabaseManager.get_all_teaching_categories(category.guild.id)
-        allowed_categories_ids.append(env.get_archive_channel(category.guild).id)
+        allowed_categories_ids.append((await env.get_archive_channel(category.guild)).id)
 
         return category.id in allowed_categories_ids
 
@@ -54,7 +54,7 @@ class ChannelSortingCoordinator:
         Note:
             This method is asynchronous and should be awaited when called.
         """
-        if not self._is_allowed_category(category):
+        if not await self._is_allowed_category(category):
             self._debug_log(f'Skipping sorting for category {category.name} ({category.id})')
             return
 

@@ -176,7 +176,7 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
 
-    archive_channel = env.get_archive_channel(interaction.guild)
+    archive_channel = await env.get_archive_channel(interaction.guild)
     if student_channel.category == archive_channel:
         raise UsageError(f"{student.mention} ist bereits archiviert")
 
@@ -218,7 +218,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
 
-    archive_channel = env.get_archive_channel(interaction.guild)
+    archive_channel = await env.get_archive_channel(interaction.guild)
     if student_channel.category != archive_channel:
         raise UsageError(f"{student.mention} ist nicht archiviert")
 
