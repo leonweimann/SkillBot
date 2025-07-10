@@ -207,6 +207,42 @@ class ArchiveCategory:
                 raise CodeError(f"Cannot add channel {channel.name} to archive category {self.category.name}. "
                                 "Either the channel is already in the archive or the archive is full.")
 
+    @property
+    def name(self) -> str:
+        """
+        Returns the name of the archive category.
+
+        This property retrieves the name of the archive category managed by this instance.
+
+        Returns:
+            str: The name of the archive category.
+        """
+        return self.category.name
+
+    @property
+    def id(self) -> int:
+        """
+        Returns the ID of the archive category.
+
+        This property retrieves the ID of the archive category managed by this instance.
+
+        Returns:
+            int: The ID of the archive category.
+        """
+        return self.category.id
+
+    @property
+    def channels(self) -> list[discord.TextChannel]:
+        """
+        Returns a list of channels in the archive category.
+
+        This property retrieves all text channels that are currently in the archive category.
+
+        Returns:
+            list[discord.TextChannel]: A list of text channels in the archive category.
+        """
+        return self.category.text_channels
+
 
 # if __name__ == "__main__":
 #     import asyncio
