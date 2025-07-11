@@ -2,8 +2,8 @@ from typing import Iterator
 
 import discord
 
-from database import Archive
-from errors import CodeError
+from Utils.database import Archive
+from Utils.errors import CodeError
 
 
 class ArchiveCategory:

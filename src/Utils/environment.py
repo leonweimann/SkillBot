@@ -266,7 +266,7 @@ def generate_member_nick(db_member: User) -> str:
     return f'{'🎓' if db_member.is_teacher else '🎒' if db_member.is_student else '👋'} {db_member.real_name}'
 
 
-async def is_member_archived(member: discord.Member) -> bool:
+def is_member_archived(member: discord.Member) -> bool:
     """
     Checks if the given Discord member is archived.
 
