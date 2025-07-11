@@ -168,7 +168,7 @@ class ArchiveCategory:
             if category:
                 yield ArchiveCategory(guild, category)
 
-    async def can_add(self, channel: discord.TextChannel) -> bool:
+    def can_add(self, channel: discord.TextChannel) -> bool:
         """
         Checks if a channel can be added to the archive category.
 
