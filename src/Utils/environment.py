@@ -1,10 +1,12 @@
 from typing import Callable, Iterable
+import warnings
 
 import discord
 
+from Utils.archive import ArchiveCategory
 from Utils.database import *
 from Utils.errors import *
-from Utils.logging import log
+from Utils.lwlogging import log
 
 
 # region Helpers
@@ -61,6 +63,19 @@ async def handle_app_command_error(interaction: discord.Interaction, error: disc
     if interaction.guild and not isinstance(error, UsageError) and not isinstance(error, app_commands.MissingRole):
         await log(interaction.guild, msg, details={'Command': command_name, 'Used by': f'{interaction.user.mention}'})
     await send_safe_response(interaction, msg, ephemeral=True)
+
+
+def deprecated(reason: str):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            warnings.warn(
+                f"{func.__name__} is deprecated: {reason}",
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # endregion
@@ -163,7 +178,8 @@ def is_assigned(member: discord.Member) -> bool:
 
 # region Channels
 
-def get_archive_channel(guild: discord.Guild) -> discord.CategoryChannel:
+@deprecated("Use ArchiveCategory.make instead")
+async def get_archive_channel(guild: discord.Guild) -> discord.CategoryChannel:
     """
     Retrieves the 'Archiv' category from the given Discord guild.
 
@@ -173,7 +189,7 @@ def get_archive_channel(guild: discord.Guild) -> discord.CategoryChannel:
     Returns:
         discord.CategoryChannel: The category object corresponding to 'Archiv' in the guild.
     """
-    return __unwrapped_get(guild.categories, '📚 Wissensbereich')
+    return (await ArchiveCategory.make(guild)).category
 
 
 def get_log_channel(guild: discord.Guild) -> discord.TextChannel:
@@ -250,7 +266,7 @@ def generate_member_nick(db_member: User) -> str:
     return f'{'🎓' if db_member.is_teacher else '🎒' if db_member.is_student else '👋'} {db_member.real_name}'
 
 
-def is_member_archived(member: discord.Member) -> bool:
+async def is_member_archived(member: discord.Member) -> bool:
     """
     Checks if the given Discord member is archived.
 
@@ -266,9 +282,15 @@ def is_member_archived(member: discord.Member) -> bool:
     """
     if is_student(member):
         ts_con = TeacherStudentConnection.find_by_student(member.guild.id, member.id)
-        if ts_con:
-            channel = member.guild.get_channel(ts_con.channel_id)
-            if channel and channel.category and channel.category.id == get_archive_channel(member.guild).id:
+        if not ts_con:
+            return False
+
+        channel = member.guild.get_channel(ts_con.channel_id)
+        if not (channel and channel.category):
+            return False
+
+        for archive in ArchiveCategory.get_all(member.guild):
+            if channel in archive.category.channels:
                 return True
     return False
 

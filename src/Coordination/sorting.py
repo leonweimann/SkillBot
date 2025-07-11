@@ -1,7 +1,7 @@
 import discord
 
+from Utils.archive import ArchiveCategory
 import Utils.database as db
-import Utils.environment as env
 
 
 class ChannelSortingCoordinator:
@@ -27,7 +27,8 @@ class ChannelSortingCoordinator:
         Check if the channel is allowed to be sorted.
         """
         allowed_categories_ids = db.DatabaseManager.get_all_teaching_categories(category.guild.id)
-        allowed_categories_ids.append(env.get_archive_channel(category.guild).id)
+        for archive in ArchiveCategory.get_all(category.guild):
+            allowed_categories_ids.append(archive.id)
 
         return category.id in allowed_categories_ids
 

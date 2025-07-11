@@ -3,9 +3,10 @@ import discord
 import Utils.environment as env
 from Coordination.sorting import channel_sorting_coordinator
 
+from Utils.archive import ArchiveCategory
 from Utils.database import *
 from Utils.errors import *
-from Utils.logging import log
+from Utils.lwlogging import log
 
 
 # region Assignments
@@ -176,11 +177,11 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
 
-    archive_channel = env.get_archive_channel(interaction.guild)
-    if student_channel.category == archive_channel:
+    if env.is_member_archived(student):
         raise UsageError(f"{student.mention} ist bereits archiviert")
 
-    await student_channel.edit(category=archive_channel)
+    archive = await ArchiveCategory.make(interaction.guild)
+    await archive.add_channel(student_channel)
 
 
 async def pop_student(interaction: discord.Interaction, student: discord.Member):
@@ -218,8 +219,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if student_channel is None:
         raise CodeError(f"Student {student.id} has no channel")
 
-    archive_channel = env.get_archive_channel(interaction.guild)
-    if student_channel.category != archive_channel:
+    if not env.is_member_archived(student):
         raise UsageError(f"{student.mention} ist nicht archiviert")
 
     db_teacher = Teacher(interaction.guild.id, ts_con.teacher_id)

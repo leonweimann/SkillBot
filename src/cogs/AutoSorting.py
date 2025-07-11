@@ -5,7 +5,7 @@ from datetime import time, timezone
 
 import Utils.environment as env
 from Utils.errors import CodeError
-from Utils.logging import log
+from Utils.lwlogging import log
 
 from Coordination.sorting import channel_sorting_coordinator
 

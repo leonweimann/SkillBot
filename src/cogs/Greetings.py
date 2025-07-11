@@ -3,7 +3,7 @@ from discord.ext import commands
 
 from Utils.database import *
 import Utils.environment as env
-from Utils.logging import log
+from Utils.lwlogging import log
 
 
 class Greetings(commands.Cog):
