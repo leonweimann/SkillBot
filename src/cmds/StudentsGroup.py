@@ -28,7 +28,6 @@ class StudentsGroup(app_commands.Group):
             student=member,
             real_name=real_name,
             customer_id=customer_id,
-            major=None,
             silent=False
         )
 
