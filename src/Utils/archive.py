@@ -20,6 +20,8 @@ class ArchiveCategory:
         category (discord.CategoryChannel): The Discord category channel managed by this instance.
     """
 
+    _MAX_CAPACITY = 50  # Maximum number of channels in an archive category
+
     def __init__(self, guild: discord.Guild, category: discord.CategoryChannel):
         """
         Initializes the class with the specified Discord guild and category channel.
@@ -65,6 +67,10 @@ class ArchiveCategory:
         does not conflict with any existing names. It uses a combination of base icons and names,
         appending a count if necessary to ensure uniqueness.
 
+        This method is limited to generating names for up to 36 unique categories
+        (9 counts for each of 4 base icons).
+        Since the capacity of archive categories is 50, this should suffice.
+
         Args:
             guild_id (int): The ID of the Discord guild for which to generate the name.
 
@@ -82,13 +88,11 @@ class ArchiveCategory:
             Archive.get_all(guild_id)
         ))
 
-        for base_icon, base_name in zip(BASE_ICONS, BASE_NAMES):
-            count = 1
-            while True:
+        for count in range(1, 10):  # Limit to 9 * 4 = 36 attempts to find a unique name
+            for base_icon, base_name in zip(BASE_ICONS, BASE_NAMES):
                 name = f"{base_icon} {base_name}" if count == 1 else f"{base_icon} {base_name} {count}"
                 if name not in current_names:
                     return name
-                count += 1
 
         raise CodeError("Failed to generate a unique name for the archive category.")
 
@@ -111,12 +115,10 @@ class ArchiveCategory:
         Raises:
             CodeError: If an error occurs while retrieving or creating the archive category.
         """
-        _MAX_CHANNELS = 50  # Maximum number of channels in a category
-
         all_archives = Archive.get_all(guild.id)
         for archive in all_archives:
             category = discord.utils.get(guild.categories, id=archive.id)
-            if category and len(category.channels) < _MAX_CHANNELS:
+            if category and len(category.channels) < ArchiveCategory._MAX_CAPACITY:
                 return category
 
         # If no suitable archive category is found, create a new one
@@ -139,14 +141,19 @@ class ArchiveCategory:
         Raises:
             CodeError: If an error occurs while creating the archive category.
         """
-        name = ArchiveCategory._generate_name(guild.id)  # Generate a unique name
+        # Generate a unique name
+        name = ArchiveCategory._generate_name(guild.id)
+
+        # Try to find an existing category with the same name
         new_category = discord.utils.get(guild.categories, name=name)
+        # If no existing category is found, create a new one
         if not new_category:
             # Create in discord
             new_category = await guild.create_category(name=name)
             # Create in database
             db_archive = Archive(guild.id, new_category.id)
             db_archive.edit(name=name)
+
         return new_category
 
     @staticmethod
@@ -176,12 +183,12 @@ class ArchiveCategory:
         and if the category has space for more channels.
 
         Args:
-            channel (discord.TextChannel): The channel to check.
+            channel (discord.TextChannel): The channel to check.´
 
         Returns:
             bool: True if the channel can be added, False otherwise.
         """
-        return channel not in self.category.channels and len(self.category.channels) < 50
+        return channel not in self.category.channels and len(self.category.channels) < ArchiveCategory._MAX_CAPACITY
 
     async def add_channel(self, channel: discord.TextChannel):
         """
@@ -197,15 +204,20 @@ class ArchiveCategory:
             CodeError: If the channel is already in the archive category or if the category is full.
         """
         if self.can_add(channel):
+            # Connect channel to this archive category
             await channel.edit(category=self.category)
         else:
             # Create new archive and add the channel there
             new_archive = await ArchiveCategory.make(self.guild)
             if new_archive.can_add(channel):
+                # Connect to new archive category
                 await channel.edit(category=new_archive.category)
             else:
-                raise CodeError(f"Cannot add channel {channel.name} to archive category {self.category.name}. "
-                                "Either the channel is already in the archive or the archive is full.")
+                # If this archive and an new archive cannot add the channel, raise an error
+                raise CodeError(
+                    f"Cannot add channel `{channel.name}` to archive category `{self.name}` or newly configured`{new_archive.name}`. "
+                    "Either the channel is already in the archive or the archive is full."
+                )
 
     @property
     def name(self) -> str:
@@ -242,21 +254,3 @@ class ArchiveCategory:
             list[discord.TextChannel]: A list of text channels in the archive category.
         """
         return self.category.text_channels
-
-
-# if __name__ == "__main__":
-#     import asyncio
-#     from unittest.mock import MagicMock
-#     from database import DatabaseManager
-
-#     async def main():
-#         DatabaseManager.create_tables(42)
-
-#         mock_guild = MagicMock(spec=discord.Guild)
-#         mock_guild.id = 42  # Example guild ID for testing
-
-#         archive_category = await ArchiveCategory.create(mock_guild)
-#         name = ArchiveCategory._generate_name(mock_guild.id)
-#         print(f"Generated archive category name: {name}")
-
-#     asyncio.run(main())
