@@ -34,23 +34,20 @@ class DevGroup(app_commands.Group):
         """
         if not interaction.guild:
             await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
+                "❌ This command can only be used in a server."
             )
             return
 
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message(
-                "❌ This command can only be used by server members.",
-                ephemeral=True
+                "❌ This command can only be used by server members."
             )
             return
 
         # Check if user is a teacher (required for cmd channel access)
         if not env.is_teacher(interaction.user):
             await interaction.response.send_message(
-                "❌ You must be a teacher to use developer mode (cmd channel required).",
-                ephemeral=True
+                "❌ You must be a teacher to use developer mode (cmd channel required)."
             )
             return
 
@@ -70,7 +67,7 @@ class DevGroup(app_commands.Group):
                 inline=False
             )
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
         except Exception as e:
             embed = discord.Embed(
@@ -78,7 +75,7 @@ class DevGroup(app_commands.Group):
                 description=f"An error occurred: {str(e)}",
                 color=discord.Color.red()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
     @dev_on.error
     async def dev_on_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -99,15 +96,13 @@ class DevGroup(app_commands.Group):
         """
         if not interaction.guild:
             await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
+                "❌ This command can only be used in a server."
             )
             return
 
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message(
-                "❌ This command can only be used by server members.",
-                ephemeral=True
+                "❌ This command can only be used by server members."
             )
             return
 
@@ -127,7 +122,7 @@ class DevGroup(app_commands.Group):
                 inline=False
             )
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
         except Exception as e:
             embed = discord.Embed(
@@ -135,7 +130,7 @@ class DevGroup(app_commands.Group):
                 description=f"An error occurred: {str(e)}",
                 color=discord.Color.red()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
     @dev_off.error
     async def dev_off_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -154,15 +149,13 @@ class DevGroup(app_commands.Group):
         """
         if not interaction.guild:
             await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
+                "❌ This command can only be used in a server."
             )
             return
 
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message(
-                "❌ This command can only be used by server members.",
-                ephemeral=True
+                "❌ This command can only be used by server members."
             )
             return
 
@@ -210,7 +203,7 @@ class DevGroup(app_commands.Group):
                 inline=True
             )
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
         except Exception as e:
             embed = discord.Embed(
@@ -218,7 +211,7 @@ class DevGroup(app_commands.Group):
                 description=f"An error occurred: {str(e)}",
                 color=discord.Color.red()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
     @dev_status.error
     async def dev_status_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -237,12 +230,11 @@ class DevGroup(app_commands.Group):
         """
         if not interaction.guild:
             await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
+                "❌ This command can only be used in a server."
             )
             return
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
 
         try:
             # Send test alert
@@ -268,7 +260,7 @@ class DevGroup(app_commands.Group):
                 color=discord.Color.red()
             )
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed)
 
     @test_alert.error
     async def test_alert_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
