@@ -422,11 +422,11 @@ class Archive:
             cursor.execute('SELECT * FROM archive WHERE id = ?', (self.id,))
             archive = cursor.fetchone()
             if archive:
-                self.id, self.name = archive[0], archive[1]
-            else:
-                self.id, self.name = None, None
+                self.name = archive[1]
 
     def save(self):
+        print(f'Saving archive {self.id} with name {self.name}')
+
         with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -437,9 +437,7 @@ class Archive:
             ''', (self.id, self.name))
             conn.commit()
 
-    def edit(self, id: int | None = None, name: str | None = None):
-        if id is not None:
-            self.id = id
+    def edit(self, name: str | None = None):
         if name is not None:
             self.name = name
         self.save()
@@ -455,4 +453,25 @@ class Archive:
 
 
 if __name__ == '__main__':
-    DatabaseManager.create_tables(42)
+    # DatabaseManager.create_tables(42)
+
+    # Delete the archive table if it exists
+    # with DatabaseManager._connect(1279925151198089332) as conn:
+    #     cursor = conn.cursor()
+    #     cursor.execute('DROP TABLE IF EXISTS archive')
+    #     conn.commit()
+
+    # Recreate all tables for the given guild_id
+    # DatabaseManager.create_tables(1279925151198089332)
+
+    # archive = Archive(1279925151198089332, 1335695937175289916)
+    # archive.edit(name='📚 Wissensbereich')
+
+    # Delete all user_voice_channel_join entries in the database.
+    # with DatabaseManager._connect(1279925151198089332) as conn:
+    #     cursor = conn.cursor()
+    #     cursor.execute('SELECT user_id FROM user_voice_channel_join')
+    #     user_ids = [row[0] for row in cursor.fetchall()]
+    #     for user_id in user_ids:
+    #         UserVoiceChannelJoin.remove(1279925151198089332, user_id)
+    ...

@@ -82,13 +82,13 @@ class ArchiveCategory:
             Archive.get_all(guild_id)
         ))
 
-        for base_icon, base_name in zip(BASE_ICONS, BASE_NAMES):
-            count = 1
-            while True:
+        count = 1
+        while count < 10:  # Limit to 9 * 4 = 36 attempts to find a unique name
+            for base_icon, base_name in zip(BASE_ICONS, BASE_NAMES):
                 name = f"{base_icon} {base_name}" if count == 1 else f"{base_icon} {base_name} {count}"
                 if name not in current_names:
                     return name
-                count += 1
+            count += 1
 
         raise CodeError("Failed to generate a unique name for the archive category.")
 
@@ -140,6 +140,7 @@ class ArchiveCategory:
             CodeError: If an error occurs while creating the archive category.
         """
         name = ArchiveCategory._generate_name(guild.id)  # Generate a unique name
+        print(f'⚠️ New archive category name: {name}')
         new_category = discord.utils.get(guild.categories, name=name)
         if not new_category:
             # Create in discord
@@ -204,7 +205,7 @@ class ArchiveCategory:
             if new_archive.can_add(channel):
                 await channel.edit(category=new_archive.category)
             else:
-                raise CodeError(f"Cannot add channel {channel.name} to archive category {self.category.name}. "
+                raise CodeError(f"Cannot add channel `{channel.name}` to archive category `{self.name}` or `{new_archive.name}`. "
                                 "Either the channel is already in the archive or the archive is full.")
 
     @property
@@ -242,21 +243,3 @@ class ArchiveCategory:
             list[discord.TextChannel]: A list of text channels in the archive category.
         """
         return self.category.text_channels
-
-
-# if __name__ == "__main__":
-#     import asyncio
-#     from unittest.mock import MagicMock
-#     from database import DatabaseManager
-
-#     async def main():
-#         DatabaseManager.create_tables(42)
-
-#         mock_guild = MagicMock(spec=discord.Guild)
-#         mock_guild.id = 42  # Example guild ID for testing
-
-#         archive_category = await ArchiveCategory.create(mock_guild)
-#         name = ArchiveCategory._generate_name(mock_guild.id)
-#         print(f"Generated archive category name: {name}")
-
-#     asyncio.run(main())
