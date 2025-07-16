@@ -11,7 +11,7 @@ from Utils.lwlogging import log
 
 # region Assignments
 
-async def assign_student(interaction: discord.Interaction, student: discord.Member, real_name: str, customer_id: int, major: str | None = None, silent: bool = False):
+async def assign_student(interaction: discord.Interaction, student: discord.Member, real_name: str, customer_id: int, silent: bool = False):
     """
     Assign a student to a teacher in a Discord server.
 
@@ -63,7 +63,7 @@ async def assign_student(interaction: discord.Interaction, student: discord.Memb
 
     # Setup student in db
     db_student = Student(interaction.guild.id, student.id)
-    db_student.edit(real_name=real_name, major=major, customer_id=customer_id)
+    db_student.edit(real_name=real_name, customer_id=customer_id)
 
     # Create teacher-student connection in db
     db_student.connect_teacher(teacher.id, student_channel.id)
