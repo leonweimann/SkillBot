@@ -47,8 +47,8 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS students (
                     user_id INTEGER PRIMARY KEY,
-                    major TEXT,
-                    customer_id TEXT UNIQUE,
+                    major_id INTEGER,
+                    customer_id INTEGER,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
@@ -253,7 +253,7 @@ class Teacher(User):
 class Student(User):
     def __init__(self, guild_id: int, user_id: int):
         super().__init__(guild_id, user_id)
-        self.major = None
+        self.major_id = None
         self.customer_id = None
         self.load_student()
 
@@ -263,19 +263,19 @@ class Student(User):
             cursor.execute('SELECT * FROM students WHERE user_id = ?', (self.id,))
             student = cursor.fetchone()
             if student:
-                self.major, self.customer_id = student[1], student[2]
+                self.major_id, self.customer_id = student[1], student[2]
 
     def save(self):
         super().save()
         with DatabaseManager._connect(self.guild_id) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO students (user_id, major, customer_id)
+                INSERT INTO students (user_id, major_id, customer_id)
                 VALUES (?, ?, ?)
                 ON CONFLICT (user_id) DO UPDATE SET
-                major = excluded.major,
+                major_id = excluded.major_id,
                 customer_id = excluded.customer_id
-            ''', (self.id, self.major, self.customer_id))
+            ''', (self.id, self.major_id, self.customer_id))
             conn.commit()
 
     def edit(self, **kwargs):
@@ -450,28 +450,3 @@ class Archive:
             return [Archive(guild_id, row[0]) for row in cursor.fetchall()]
 
 # endregion
-
-
-if __name__ == '__main__':
-    # DatabaseManager.create_tables(42)
-
-    # Delete the archive table if it exists
-    # with DatabaseManager._connect(1279925151198089332) as conn:
-    #     cursor = conn.cursor()
-    #     cursor.execute('DROP TABLE IF EXISTS archive')
-    #     conn.commit()
-
-    # Recreate all tables for the given guild_id
-    # DatabaseManager.create_tables(1279925151198089332)
-
-    # archive = Archive(1279925151198089332, 1335695937175289916)
-    # archive.edit(name='📚 Wissensbereich')
-
-    # Delete all user_voice_channel_join entries in the database.
-    # with DatabaseManager._connect(1279925151198089332) as conn:
-    #     cursor = conn.cursor()
-    #     cursor.execute('SELECT user_id FROM user_voice_channel_join')
-    #     user_ids = [row[0] for row in cursor.fetchall()]
-    #     for user_id in user_ids:
-    #         UserVoiceChannelJoin.remove(1279925151198089332, user_id)
-    ...
