@@ -161,6 +161,32 @@ def is_admin(member: discord.Member) -> bool:
     return get_admin_role(member.guild) in member.roles
 
 
+def get_dev_role(guild: discord.Guild) -> discord.Role:
+    """
+    Retrieves the 'Dev' role from the given Discord guild.
+
+    Args:
+        guild (discord.Guild): The Discord guild from which to retrieve the role.
+
+    Returns:
+        discord.Role: The role object corresponding to 'Dev' in the guild.
+    """
+    return __unwrapped_get(guild.roles, 'Dev')
+
+
+def is_dev(member: discord.Member) -> bool:
+    """
+    Checks if the given Discord member has the 'Dev' role.
+
+    Args:
+        member (discord.Member): The Discord member to check.
+
+    Returns:
+        bool: True if the member has the 'Dev' role, False otherwise.
+    """
+    return get_dev_role(member.guild) in member.roles
+
+
 def is_assigned(member: discord.Member) -> bool:
     """
     Checks if the given Discord member has any of the roles: 'Schüler', 'Lehrer', or 'Admin'.
@@ -203,6 +229,19 @@ def get_log_channel(guild: discord.Guild) -> discord.TextChannel:
         discord.TextChannel: The channel object corresponding to 'logs' in the guild.
     """
     return __unwrapped_get(guild.text_channels, 'logs')
+
+
+def get_alerts_channel(guild: discord.Guild) -> discord.TextChannel:
+    """
+    Retrieves the 'alerts' channel from the given Discord guild.
+
+    Args:
+        guild (discord.Guild): The Discord guild from which to retrieve the channel.
+
+    Returns:
+        discord.TextChannel: The channel object corresponding to 'alerts' in the guild.
+    """
+    return __unwrapped_get(guild.text_channels, 'alerts')
 
 
 def generate_student_channel_name(student_name: str):
