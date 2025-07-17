@@ -167,7 +167,8 @@ async def setup_server(guild: Guild):
                 send_messages=False,
                 view_channel=True
             )
-        }
+        },
+        default_auto_archive_duration=10080  # 7 days
     )
 
     await lounge_voice_channel.edit(
