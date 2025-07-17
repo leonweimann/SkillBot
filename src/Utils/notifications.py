@@ -1,9 +1,9 @@
 import discord
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 
 import Utils.environment as env
-from Utils.database import DatabaseManager, Teacher, DevMode
+from Utils.database import Teacher, DevMode
 from Utils.lwlogging import log
 
 
