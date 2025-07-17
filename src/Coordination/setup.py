@@ -56,7 +56,9 @@ async def setup_server(guild: Guild):
             speak=True,
             stream=True,
             use_application_commands=True,
-            view_channel=True
+            view_channel=True,
+            use_voice_activation=True,
+            priority_speaker=True
         )
     )
 
@@ -76,7 +78,9 @@ async def setup_server(guild: Guild):
             speak=True,
             stream=True,
             use_application_commands=True,
-            view_channel=True
+            view_channel=True,
+            use_voice_activation=True,
+            priority_speaker=True
         )
     )
 
