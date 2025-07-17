@@ -122,6 +122,13 @@ class DatabaseManager:
                         name TEXT NOT NULL UNIQUE
                     )
                 ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS dev_mode (
+                        user_id INTEGER PRIMARY KEY,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                ''')
                 conn.commit()
                 logger.info(f"Database tables created successfully for guild {guild_id}")
         except sqlite3.Error as e:
@@ -834,5 +841,59 @@ class Archive:
         except sqlite3.Error as e:
             logger.error(f"Failed to get all archives for guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to retrieve archives: {e}") from e
+
+# endregion
+
+
+# region DevMode
+
+class DevMode:
+    """Manages per-user developer mode settings."""
+
+    @staticmethod
+    def set_dev_mode(guild_id: int, user_id: int, is_active: bool):
+        """Set dev mode status for a user."""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                if is_active:
+                    cursor.execute('''
+                        INSERT INTO dev_mode (user_id, is_active)
+                        VALUES (?, ?)
+                        ON CONFLICT (user_id) DO UPDATE SET is_active = excluded.is_active
+                    ''', (user_id, True))
+                else:
+                    # If deactivating, remove the record entirely
+                    cursor.execute('DELETE FROM dev_mode WHERE user_id = ?', (user_id,))
+                conn.commit()
+                logger.debug(f"Set dev mode to {is_active} for user {user_id} in guild {guild_id}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to set dev mode for user {user_id} in guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to set dev mode: {e}") from e
+
+    @staticmethod
+    def is_dev_mode_active(guild_id: int, user_id: int) -> bool:
+        """Check if dev mode is active for a user."""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT is_active FROM dev_mode WHERE user_id = ?', (user_id,))
+                result = cursor.fetchone()
+                return result[0] if result else False
+        except sqlite3.Error as e:
+            logger.error(f"Failed to check dev mode for user {user_id} in guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to check dev mode: {e}") from e
+
+    @staticmethod
+    def get_active_dev_users(guild_id: int) -> List[int]:
+        """Get all users with active dev mode."""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT user_id FROM dev_mode WHERE is_active = 1')
+                return [row[0] for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get active dev users for guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to get active dev users: {e}") from e
 
 # endregion
