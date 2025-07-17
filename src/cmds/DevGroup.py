@@ -238,12 +238,12 @@ class DevGroup(app_commands.Group):
 
         try:
             # Send test alert
-            await NotificationManager.send_integrity_alert(
+            await NotificationManager.send_system_alert(
                 guild=interaction.guild,
                 issue_type="Test Alert",
                 component="DevGroup",
                 total_issues=1,
-                details=f"Test notification triggered by {interaction.user.mention}",
+                details=f"Test notification triggered by {interaction.user.display_name} (ID: {interaction.user.id})",
                 context_user_id=interaction.user.id
             )
 

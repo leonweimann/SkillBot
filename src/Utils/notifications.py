@@ -17,7 +17,7 @@ class NotificationManager:
     """
 
     @staticmethod
-    async def send_integrity_alert(
+    async def send_system_alert(
         guild: discord.Guild,
         issue_type: str,
         component: str,
