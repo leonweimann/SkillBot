@@ -5,7 +5,6 @@ import asyncio
 
 from datetime import time, timezone, datetime
 
-import Utils.environment as env
 from Utils.database import DatabaseManager
 from Utils.notifications import NotificationManager
 
@@ -19,12 +18,18 @@ class DatabaseIntegrity(commands.Cog):
     It checks for missing or corrupted data and logs any issues found.
     """
 
+    # region Configuration
+
     # Configuration constants
     WEEKLY_CHECK_HOUR = 22  # 22:00 UTC (10 PM)
     WEEKLY_CHECK_MINUTE = 0
     WEEKLY_CHECK_DAY = 5    # Saturday (0=Monday, 6=Sunday)
     API_CALL_DELAY = 0.1    # Delay between Discord API calls to avoid rate limits
     MAX_CONCURRENT_API_CALLS = 5  # Maximum concurrent API calls
+
+    # endregion
+
+    # region Initialization and Event Handlers
 
     def __init__(self, bot):
         self.bot = bot
@@ -82,6 +87,10 @@ class DatabaseIntegrity(commands.Cog):
     def cog_unload(self):
         """Clean up the task when the cog is unloaded."""
         self.weekly_integrity_check.cancel()
+
+    # endregion
+
+    # region Manual and Main Integrity Check Methods
 
     async def run_manual_integrity_check(self, guild: discord.Guild) -> Dict[str, Any]:
         """
@@ -278,6 +287,10 @@ class DatabaseIntegrity(commands.Cog):
                 'issues_by_type': issues_by_type,
                 'duration': duration_str
             }
+
+    # endregion
+
+    # region Orphaned Data Checks
 
     async def _check_orphaned_subusers(self, guild: discord.Guild) -> List[Dict[str, Any]]:
         """
@@ -568,6 +581,10 @@ class DatabaseIntegrity(commands.Cog):
 
         return issues
 
+    # endregion
+
+    # region Time-based and Voice Channel Checks
+
     async def _check_voice_channel_joins_older_than_one_day(self, guild: discord.Guild) -> List[Dict[str, Any]]:
         """
         Check for voice channel joins that are older than one day, which shouldn't happen.
@@ -609,6 +626,10 @@ class DatabaseIntegrity(commands.Cog):
             raise
 
         return issues
+
+    # endregion
+
+    # region Connection and Validation Checks
 
     async def _check_orphaned_dev_mode_entries(self, guild: discord.Guild) -> List[Dict[str, Any]]:
         """
@@ -926,6 +947,10 @@ class DatabaseIntegrity(commands.Cog):
 
         return issues
 
+    # endregion
+
+    # region Discord Entity Validation
+
     async def _check_nonexistent_discord_users(self, guild: discord.Guild) -> List[Dict[str, Any]]:
         """
         Check for user IDs in the database that don't exist as Discord users in the guild.
@@ -1071,6 +1096,12 @@ class DatabaseIntegrity(commands.Cog):
 
         return issues
 
+    # endregion
+
+
+# region Cog Setup
 
 async def setup(bot):
     await bot.add_cog(DatabaseIntegrity(bot))
+
+# endregion
