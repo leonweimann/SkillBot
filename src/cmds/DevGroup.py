@@ -1,6 +1,8 @@
 import discord
 from discord import app_commands
 
+from cmds.subgroups.ManualTaskLaunchSubGroup import ManualTaskLaunchSubGroup
+
 import Utils.environment as env
 from Utils.database import DevMode
 from Utils.notifications import NotificationManager
@@ -20,6 +22,8 @@ class DevGroup(app_commands.Group):
             name="dev",
             description="Developer mode commands"
         )
+        # Add the manual task launch subgroup
+        self.add_command(ManualTaskLaunchSubGroup())
 
     @app_commands.command(
         name="on",
