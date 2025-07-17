@@ -75,27 +75,38 @@ class DatabaseIntegrity(commands.Cog):
         """Clean up the task when the cog is unloaded."""
         self.weekly_integrity_check.cancel()
 
-    # @commands.command(name="check_integrity", hidden=True)
-    # @commands.has_permissions(administrator=True)
-    # async def manual_integrity_check(self, ctx: commands.Context):
-    #     """
-    #     Manually trigger a database integrity check for the current guild.
+    async def run_manual_integrity_check(self, guild: discord.Guild) -> Dict[str, Any]:
+        """
+        Run a manual database integrity check for a specific guild.
 
-    #     This command is restricted to administrators and is useful for testing
-    #     or immediate checks when issues are suspected.
-    #     """
-    #     if ctx.guild is None:
-    #         await ctx.send("❌ This command can only be used in a server.")
-    #         return
+        This method can be called from commands to trigger an integrity check on demand.
 
-    #     await ctx.send("🔍 Starting manual database integrity check...")
+        Args:
+            guild: The Discord guild to check
 
-    #     try:
-    #         await self._check_guild_integrity(ctx.guild)
-    #         await ctx.send("✅ Manual integrity check completed. Check logs and alerts for details.")
-    #     except Exception as e:
-    #         await ctx.send(f"❌ Manual integrity check failed: {e}")
-    #         print(f"[DatabaseIntegrity] Manual check failed for guild {ctx.guild.id}: {e}")
+        Returns:
+            Dict containing check results with keys:
+            - 'success': bool - Whether the check completed successfully
+            - 'total_checks': int - Number of checks that were run
+            - 'failed_checks': int - Number of checks that failed to run
+            - 'total_issues': int - Total number of issues found
+            - 'issues_by_type': dict - Issues grouped by type
+            - 'error_message': str - Error message if check failed completely
+        """
+        try:
+            print(f"[DatabaseIntegrity] Manual integrity check started for guild {guild.id} ({guild.name})")
+            await self._check_guild_integrity(guild)
+            return {
+                'success': True,
+                'message': 'Manual integrity check completed successfully'
+            }
+        except Exception as e:
+            error_msg = f"Manual integrity check failed for guild {guild.id}: {e}"
+            print(f"[DatabaseIntegrity] {error_msg}")
+            return {
+                'success': False,
+                'error_message': error_msg
+            }
 
     async def _check_guild_integrity(self, guild: discord.Guild):
         """
