@@ -82,4 +82,6 @@ class LevelingCog(commands.Cog):
 
 
 async def setup(bot):
+    print(f'⚠️ [COG] {LevelingCog.__name__} is deactivated.')
+    return
     await bot.add_cog(LevelingCog(bot))
