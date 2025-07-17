@@ -18,7 +18,7 @@ class NotificationManager:
 
     @staticmethod
     async def send_integrity_alert(
-        bot: discord.Client,
+        guild: discord.Guild,
         issue_type: str,
         component: str,
         total_issues: int,
@@ -29,32 +29,31 @@ class NotificationManager:
         Send an integrity issue alert to logs, alerts channel, and appropriate cmd channels.
 
         Args:
-            bot: The Discord bot instance
+            guild: The specific guild to send the alert to
             issue_type: Type of integrity issue (e.g., "Orphaned Subusers")
             component: Component that detected the issue (e.g., "DatabaseIntegrity")
-            total_issues: Total number of issues found across all guilds
+            total_issues: Total number of issues found
             details: Detailed description of the issues
             context_user_id: ID of user who triggered the check (optional)
         """
-        for guild in bot.guilds:
-            try:
-                # Send detailed log to the logs channel
-                await NotificationManager._send_detailed_log(
-                    guild, issue_type, component, total_issues, details
-                )
+        try:
+            # Send detailed log to the logs channel
+            await NotificationManager._send_detailed_log(
+                guild, issue_type, component, total_issues, details
+            )
 
-                # Send alert to alerts channel
-                await NotificationManager._send_alerts_channel_notification(
-                    guild, issue_type, component, total_issues
-                )
+            # Send alert to alerts channel
+            await NotificationManager._send_alerts_channel_notification(
+                guild, issue_type, component, total_issues
+            )
 
-                # Send notifications to appropriate cmd channels
-                await NotificationManager._send_cmd_notifications(
-                    guild, issue_type, component, total_issues, context_user_id
-                )
+            # Send notifications to appropriate cmd channels
+            await NotificationManager._send_cmd_notifications(
+                guild, issue_type, component, total_issues, context_user_id
+            )
 
-            except Exception as e:
-                print(f"[NotificationManager] Failed to send alerts for guild {guild.id}: {e}")
+        except Exception as e:
+            print(f"[NotificationManager] Failed to send alerts for guild {guild.id}: {e}")
 
     @staticmethod
     async def _send_detailed_log(
@@ -107,7 +106,7 @@ class NotificationManager:
 
     @staticmethod
     async def send_system_error(
-        bot: discord.Client,
+        guild: discord.Guild,
         component: str,
         error_message: str,
         error_details: Optional[str] = None,
@@ -117,36 +116,35 @@ class NotificationManager:
         Send a system error notification.
 
         Args:
-            bot: The Discord bot instance
+            guild: The specific guild to send the error to
             component: Component that encountered the error
             error_message: Brief error message
             error_details: Detailed error information
             context_user_id: ID of user who triggered the error (optional)
         """
-        for guild in bot.guilds:
-            try:
-                # Log to logs channel
-                await log(
-                    guild,
-                    f"[ERROR] {component}: {error_message}",
-                    {"Details": error_details or "No additional details", "Component": component}
-                )
+        try:
+            # Log to logs channel
+            await log(
+                guild,
+                f"[ERROR] {component}: {error_message}",
+                {"Details": error_details or "No additional details", "Component": component}
+            )
 
-                # Send alerts and cmd notifications
-                await NotificationManager._send_alerts_channel_notification(
-                    guild, "System Error", component, 1
-                )
+            # Send alerts and cmd notifications
+            await NotificationManager._send_alerts_channel_notification(
+                guild, "System Error", component, 1
+            )
 
-                await NotificationManager._send_cmd_notifications(
-                    guild, "System Error", component, 1, context_user_id
-                )
+            await NotificationManager._send_cmd_notifications(
+                guild, "System Error", component, 1, context_user_id
+            )
 
-            except Exception as e:
-                print(f"[NotificationManager] Failed to send error notification for guild {guild.id}: {e}")
+        except Exception as e:
+            print(f"[NotificationManager] Failed to send error notification for guild {guild.id}: {e}")
 
     @staticmethod
     async def send_success_notification(
-        bot: discord.Client,
+        guild: discord.Guild,
         component: str,
         message: str
     ):
@@ -154,19 +152,18 @@ class NotificationManager:
         Send a success notification to logs channel.
 
         Args:
-            bot: The Discord bot instance
+            guild: The specific guild to send the notification to
             component: Component reporting success
             message: Success message
         """
-        for guild in bot.guilds:
-            try:
-                await log(
-                    guild,
-                    f"[SUCCESS] {component}: {message}",
-                    {"Component": component}
-                )
-            except Exception as e:
-                print(f"[NotificationManager] Failed to send success notification for guild {guild.id}: {e}")
+        try:
+            await log(
+                guild,
+                f"[SUCCESS] {component}: {message}",
+                {"Component": component}
+            )
+        except Exception as e:
+            print(f"[NotificationManager] Failed to send success notification for guild {guild.id}: {e}")
 
     @staticmethod
     async def _send_alerts_channel_notification(

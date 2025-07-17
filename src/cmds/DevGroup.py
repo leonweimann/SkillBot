@@ -239,7 +239,7 @@ class DevGroup(app_commands.Group):
         try:
             # Send test alert
             await NotificationManager.send_integrity_alert(
-                bot=interaction.client,
+                guild=interaction.guild,
                 issue_type="Test Alert",
                 component="DevGroup",
                 total_issues=1,
