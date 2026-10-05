@@ -44,6 +44,7 @@ class GraphError(Exception):
 # region Constants
 
 SCOPES = ['Calendars.Read']
+RELOGIN_ERRORS = {'invalid_grant', 'interaction_required'}
 
 GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0'
 AUTHORITY_BASE_URL = 'https://login.microsoftonline.com'
@@ -164,6 +165,11 @@ async def complete_device_flow(flow: dict) -> str:
 
     try:
         result, serialized = await asyncio.to_thread(_complete)
+    except asyncio.CancelledError:
+        # MSAL keeps polling for up to ~15 min and would block interpreter shutdown;
+        # an expired flow makes it stop after the current poll interval.
+        flow['expires_at'] = 0
+        raise
     except GraphNotConfiguredError:
         raise
     except Exception as e:
@@ -211,9 +217,12 @@ async def _acquire_token(db_cal: 'TeacherCalendar') -> str:
         result = app.acquire_token_silent_with_error(SCOPES, accounts[0])
         if result is None:
             raise GraphAuthError('No cached token available; please log in again')
-        if 'error' in result or 'access_token' not in result:
+        if 'access_token' not in result:
             description = result.get('error_description') or result.get('error') or 'unknown error'
-            raise GraphAuthError(f'Token refresh failed; please log in again: {description}')
+            if result.get('error') in RELOGIN_ERRORS:
+                raise GraphAuthError(f'Token refresh failed; please log in again: {description}')
+            # Transient issues (e.g. temporarily_unavailable) must not ask the teacher to re-link
+            raise GraphError(f'Token refresh failed: {description}')
 
         new_cache = cache.serialize() if cache.has_state_changed else None
         return result['access_token'], new_cache
@@ -308,6 +317,19 @@ async def _get_json(session: Any, url: str, token: str, params: Optional[dict] =
 
 # region Public API
 
+def _values(data: Any) -> list:
+    """
+    Returns the ``value`` list of a Graph collection response.
+
+    A 2xx body without such a list (proxy page, API change) raises instead of being treated as
+    "no events" — otherwise the nightly preparation would archive every student.
+    """
+    values = data.get('value') if isinstance(data, dict) else None
+    if not isinstance(values, list):
+        raise GraphError('Unexpected Microsoft Graph response: missing "value" list')
+    return values
+
+
 async def list_calendars(db_cal: 'TeacherCalendar') -> list[tuple[str, str]]:
     """
     Lists the calendars of the linked Microsoft account.
@@ -329,7 +351,7 @@ async def list_calendars(db_cal: 'TeacherCalendar') -> list[tuple[str, str]]:
     async with _new_session() as session:
         while url:
             data = await _get_json(session, url, token, params=params)
-            calendars.extend((c['id'], c.get('name') or '') for c in data.get('value', []))
+            calendars.extend((c['id'], c.get('name') or '') for c in _values(data))
             url = data.get('@odata.nextLink')
             params = None  # nextLink already carries all query parameters
     return calendars
@@ -371,7 +393,7 @@ async def get_events(db_cal: 'TeacherCalendar', start: datetime, end: datetime) 
     async with _new_session() as session:
         while url:
             data = await _get_json(session, url, token, params=params)
-            events.extend(data.get('value', []))
+            events.extend(_values(data))
             url = data.get('@odata.nextLink')
             params = None  # nextLink already carries all query parameters
     return events
