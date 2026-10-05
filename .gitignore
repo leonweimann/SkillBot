@@ -17,3 +17,5 @@ env/
 
 # Ignore VSCode settings
 .vscode/
+# Ignore uv/venv environment
+.venv/
