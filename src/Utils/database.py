@@ -694,6 +694,46 @@ class TeacherStudentConnection:
             logger.error(f"Failed to find connection for teacher {teacher_id} in guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to find teacher-student connection: {e}") from e
 
+    @staticmethod
+    def find_all_by_teacher(guild_id: int, teacher_id: int) -> List['TeacherStudentConnection']:
+        """Find all connections of a teacher"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT teacher_id, student_id, channel_id FROM teacher_student WHERE teacher_id = ?', (teacher_id,))
+                return [
+                    TeacherStudentConnection(
+                        guild_id=guild_id,
+                        teacher_id=row[0],
+                        student_id=row[1],
+                        channel_id=row[2]
+                    )
+                    for row in cursor.fetchall()
+                ]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to find connections for teacher {teacher_id} in guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to find teacher-student connections: {e}") from e
+
+    @staticmethod
+    def find_by_channel(guild_id: int, channel_id: int) -> Optional['TeacherStudentConnection']:
+        """Find connection by channel ID"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT teacher_id, student_id, channel_id FROM teacher_student WHERE channel_id = ?', (channel_id,))
+                connection = cursor.fetchone()
+                if connection:
+                    return TeacherStudentConnection(
+                        guild_id=guild_id,
+                        teacher_id=connection[0],
+                        student_id=connection[1],
+                        channel_id=connection[2]
+                    )
+                return None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to find connection for channel {channel_id} in guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to find teacher-student connection: {e}") from e
+
 # endregion
 
 
