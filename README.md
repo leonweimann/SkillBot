@@ -7,16 +7,19 @@ Lehrers anhand seines Outlook-Kalenders automatisch vorbereiten.
 
 ## Setup
 
-Voraussetzung: Python 3.12+
+Voraussetzung: [uv](https://docs.astral.sh/uv/). uv installiert bei Bedarf auch Python 3.12
+(siehe `.python-version`).
 
 ```bash
-uv venv --python 3.12 .venv
-source .venv/bin/activate
-pip install -r requirements.txt        # mit uv: uv pip install -r requirements.txt
+uv sync --no-dev                       # .venv anlegen, Abhängigkeiten aus uv.lock installieren
 cp .env.example .env                   # und Werte eintragen
 mkdir -p data                          # Datenverzeichnis, muss existieren
-python src/main.py
+uv run python src/main.py
 ```
+
+- Abhängigkeiten stehen in `pyproject.toml`, die exakten Versionen in `uv.lock` (mit committen).
+  Neue Pakete mit `uv add <paket>` hinzufügen, Updates mit `uv lock --upgrade-package <paket>`.
+- `discord.py` ist bewusst gepinnt, weil das Channel-Sorting einen internen Endpoint von discord.py nutzt.
 
 - Der Bot muss aus dem Repo-Root gestartet werden: `main.py` lädt die Erweiterungen über
   `./src/cogs` und `./src/cmds` relativ zum aktuellen Verzeichnis.
@@ -30,8 +33,8 @@ python src/main.py
 ## Tests
 
 ```bash
-pip install -r requirements-dev.txt
-.venv/bin/pytest -q
+uv sync                                # inkl. Dev-Gruppe (pytest)
+uv run pytest -q
 ```
 
 ## Kalender-Automatik (Auto-Stash/Pop)
