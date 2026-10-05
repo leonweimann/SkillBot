@@ -251,13 +251,15 @@ queries against a temp DB by monkeypatching the db path). Discord/Graph side ver
 
 ## Delivery
 
-Stacked PRs via `gh stack` on top of `main` (nothing merged), Conventional Commits, small commits:
+Stacked PRs via `gh stack` on top of `main` (nothing merged), Conventional Commits, small commits
+(bottom → top):
 1. `docs/calendar-spec` — this spec
 2. `chore/tooling-and-integrity` — disable weekly integrity run, requirements, pytest setup
 3. `fix/channel-sorting` — bulk sorting
 4. `feat/calendar-db` — table + queries
 5. `feat/calendar-matching` — `schedule.py`
 6. `feat/msgraph-client` — `msgraph.py`
-7. `feat/daily-preparation` — `daily_prep.py`, `DailyPreparation` cog, `/calendar` commands
-8. `feat/auto-pop` — `AutoPop` cog
-9. `docs/calendar-setup` — README
+7. `feat/daily-preparation` — env followup fix, archive return value, `daily_prep.py`, `DailyPreparation` cog
+8. `feat/calendar-commands` — `/calendar` commands
+9. `feat/auto-pop` — `AutoPop` cog
+10. `docs/calendar-setup` — README
