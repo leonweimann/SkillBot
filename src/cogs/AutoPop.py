@@ -2,14 +2,48 @@ import discord
 from discord.ext import commands
 
 from Coordination.daily_prep import is_archived_category, pop_to_teacher
-from Utils.database import TeacherStudentConnection
+from Utils.database import Subuser, TeacherStudentConnection
 from Utils.lwlogging import log
+
+LOUNGE_CHANNEL_NAME = 'lounge'  # Voice channel that serves as the waiting room
+
+
+def joined_lounge(before_channel, after_channel) -> bool:
+    """
+    Checks whether a voice state change is a join of the lounge.
+
+    Args:
+        before_channel: The voice channel before the change (``None`` if not connected).
+        after_channel: The voice channel after the change (``None`` if not connected).
+
+    Returns:
+        bool: True only if the lounge was entered, False for leaving, other channels
+        and state changes within the same channel (mute, deafen, stream, video).
+    """
+    if after_channel is None or after_channel.name != LOUNGE_CHANNEL_NAME:
+        return False
+    return before_channel is None or before_channel.id != after_channel.id
+
+
+def resolve_student_id(guild_id: int, member_id: int) -> int:
+    """
+    Maps a connected sub-account to its main user.
+
+    Args:
+        guild_id (int): The ID of the guild.
+        member_id (int): The ID of the member.
+
+    Returns:
+        int: The ID of the main user if the member is a sub-account, otherwise ``member_id``.
+    """
+    user = Subuser.get_user_of_subuser(guild_id, member_id)
+    return user.id if user is not None else member_id
 
 
 class AutoPop(commands.Cog):
     """
     Moves an archived student channel back into the teacher's category as soon as someone
-    other than the teacher writes into it.
+    other than the teacher writes into it, or as soon as the student joins the lounge voice channel.
     """
 
     def __init__(self, bot):
@@ -19,6 +53,14 @@ class AutoPop(commands.Cog):
     def _debug_print(self, message: str):
         if self.debug:
             print(f'[DEBUG] {self.__class__.__name__}: {message}')
+
+    async def _log_error(self, guild: discord.Guild, subject: str, error: Exception):
+        """Logs a failed auto-pop; never raises."""
+        self._debug_print(f'Error while auto-popping {subject}: {error}')
+        try:
+            await log(guild, f'[ERROR] Auto-Pop für {subject} fehlgeschlagen', {'error': str(error)})
+        except Exception as log_error:
+            print(f'[{self.__class__.__name__}] Failed to log auto-pop error in guild {guild.name}: {log_error}')
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -59,15 +101,42 @@ class AutoPop(commands.Cog):
                     {'Lehrer': f'<@{ts_con.teacher_id}>', 'Channel': channel.name}
                 )
         except Exception as e:
-            self._debug_print(f'Error while auto-popping {channel.name}: {e}')
-            try:
+            await self._log_error(guild, channel.mention, e)
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        """
+        Pops the archived student channel of a student into the teacher's category when the
+        student joins the lounge voice channel.
+
+        Sub-accounts are resolved to their main student. Ignores bots, state changes within
+        a channel, other voice channels and members without a student channel (e.g. teachers).
+        Never raises; errors are logged.
+        """
+        if member.bot or not joined_lounge(before.channel, after.channel):
+            return
+
+        guild = member.guild
+        try:
+            student_id = resolve_student_id(guild.id, member.id)
+            ts_con = TeacherStudentConnection.find_by_student(guild.id, student_id)
+            if ts_con is None:
+                return
+
+            # Cheap pre-check from the cache, before any further API call
+            channel = guild.get_channel(ts_con.channel_id)
+            if channel is None or not is_archived_category(guild, channel.category_id):
+                return
+
+            if await pop_to_teacher(guild, ts_con):
+                self._debug_print(f'Popped {channel.name} in guild {guild.name}')
                 await log(
                     guild,
-                    f'[ERROR] Auto-Pop für {channel.mention} fehlgeschlagen',
-                    {'error': str(e)}
+                    f'Auto-Pop: {channel.mention} wurde verschoben, weil {member.mention} die Lounge betreten hat',
+                    {'Lehrer': f'<@{ts_con.teacher_id}>', 'Channel': channel.name}
                 )
-            except Exception as log_error:
-                print(f'[{self.__class__.__name__}] Failed to log auto-pop error in guild {guild.name}: {log_error}')
+        except Exception as e:
+            await self._log_error(guild, member.mention, e)
 
 
 async def setup(bot):
