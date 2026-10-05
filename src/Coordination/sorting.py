@@ -4,6 +4,43 @@ from Utils.archive import ArchiveCategory
 import Utils.database as db
 
 
+def ordered_channels(channels) -> list:
+    """
+    Returns the given channels in their target order.
+
+    The channel named 'cmd' (if present) comes first, all other channels follow
+    alphabetically by their lowercase name. Equal names are ordered by their id
+    so the result is deterministic.
+
+    Args:
+        channels: Iterable of channel-like objects with `id` and `name` attributes.
+
+    Returns:
+        list: The channels in sorted order.
+    """
+    return sorted(channels, key=lambda c: (c.name != 'cmd', c.name.lower(), c.id))
+
+
+def build_position_payload(ordered) -> list[dict]:
+    """
+    Builds the payload for a bulk channel position update.
+
+    Every channel gets the position of its index in `ordered`. Only channels whose
+    current position differs from their target position are included.
+
+    Args:
+        ordered: Channel-like objects (with `id` and `position`) in their target order.
+
+    Returns:
+        list[dict]: Entries of the form `{"id": int, "position": int}`.
+    """
+    return [
+        {"id": channel.id, "position": index}
+        for index, channel in enumerate(ordered)
+        if channel.position != index
+    ]
+
+
 class ChannelSortingCoordinator:
     __debug_mode = False
 
@@ -32,6 +69,18 @@ class ChannelSortingCoordinator:
 
         return category.id in allowed_categories_ids
 
+    @staticmethod
+    async def _bulk_update_positions(guild: discord.Guild, payload: list[dict], reason: str | None = None):
+        """
+        Updates the positions of multiple channels with a single request.
+
+        Note:
+            discord.py offers no public bulk position API (`channel.edit(position=...)` renumbers
+            the whole guild from a possibly stale cache), so the private HTTP client is used here.
+            discord.py is pinned in requirements.txt to keep this call stable.
+        """
+        await guild._state.http.bulk_channel_update(guild.id, payload, reason=reason)
+
     async def sort_channels_in_category(self, category: discord.CategoryChannel):
         """
         Sorts the channels within a given Discord category alphabetically by their name,
@@ -46,10 +95,10 @@ class ChannelSortingCoordinator:
 
         Behavior:
             - Skips sorting if the category is not allowed (based on `_is_allowed_category`).
-            - Sorts channels alphabetically by their lowercase names.
-            - Ensures the channel named 'cmd' (if it exists) is placed at the top of the list.
-            - Updates the position of each channel in the category if their current position
-              does not match the sorted order.
+            - Fetches fresh channel data from the API instead of relying on the cache.
+            - Sorts the text channels of the category with `ordered_channels`.
+            - Sends a single bulk position update for all channels whose position
+              does not match the sorted order (nothing is sent if all are in place).
             - Logs debug information about the sorting process and any position updates.
 
         Note:
@@ -59,23 +108,26 @@ class ChannelSortingCoordinator:
             self._debug_log(f'Skipping sorting for category {category.name} ({category.id})')
             return
 
-        # Sort the channels by their name
-        sorted_channels = sorted(category.channels, key=lambda c: c.name.lower())
-
-        cmd_channel = discord.utils.get(category.channels, name='cmd')
-        if cmd_channel:
-            sorted_channels.remove(cmd_channel)
-            sorted_channels.insert(0, cmd_channel)
-
         self._debug_log(f'Sorting channels in category {category.name} ({category.id})')
 
-        # Update the position of each channel
-        for index, channel in enumerate(sorted_channels):
+        guild = category.guild
+        channels = [
+            c for c in await guild.fetch_channels()
+            if isinstance(c, discord.TextChannel) and c.category_id == category.id
+        ]
+
+        ordered = ordered_channels(channels)
+        payload = build_position_payload(ordered)
+
+        if not payload:
+            self._debug_log(f'No need to update channels in category {category.name} ({category.id})')
+            return
+
+        for index, channel in enumerate(ordered):
             if channel.position != index:
                 self._debug_log(f'Updating {channel.name} to position {index} (current: {channel.position})')
-                await channel.edit(position=index)
-            else:
-                self._debug_log(f'No need to update {channel.name} (current: {channel.position})')
+
+        await self._bulk_update_positions(guild, payload, reason=f'Sort channels in category {category.name}')
 
 
 channel_sorting_coordinator = ChannelSortingCoordinator()
