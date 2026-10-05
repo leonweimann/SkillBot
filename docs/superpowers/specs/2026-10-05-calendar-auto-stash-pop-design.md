@@ -226,7 +226,8 @@ return True.
 
 - `cogs/DatabaseIntegrity.py`: weekly loop no longer started (manual commands stay).
 - `requirements.txt` (pinned `discord.py==2.7.1`, `python-dotenv`, `msal==1.35.0`),
-  `requirements-dev.txt` (`pytest`), `pytest.ini` (`pythonpath = src`, `testpaths = tests`),
+  `requirements-dev.txt` (`pytest`), `pytest.ini` (`pythonpath = src`, `testpaths = tests`)
+  — later replaced by uv (`pyproject.toml`, `uv.lock`, branch `build/uv`),
   `.gitignore` += `.venv/`.
 - README: setup incl. Entra app registration, `.env` keys, `/calendar` usage.
 
