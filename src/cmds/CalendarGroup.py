@@ -97,7 +97,8 @@ async def _finish_connect(guild: discord.Guild, member: discord.Member, flow: di
         teacher = Teacher(guild.id, member.id)
         if teacher.teaching_category is None:
             raise UsageError('Du bist nicht als Lehrer registriert.')
-        TeacherCalendar(guild.id, member.id).edit(token_cache=token_cache)
+        db_cal = TeacherCalendar(guild.id, member.id)
+        db_cal.link(token_cache)
         _calendar_cache.pop((guild.id, member.id), None)
     except msgraph.GraphAuthError:
         await _notify_teacher(guild, member, env.failure_response(
@@ -113,6 +114,11 @@ async def _finish_connect(guild: discord.Guild, member: discord.Member, flow: di
         return
     await _notify_teacher(guild, member, env.success_response(
         'Dein Microsoft-Konto ist verknüpft. Nächster Schritt: Wähle mit `/calendar select` deinen Kalender aus.'))
+    # Warm the cache: the select autocomplete must answer within 3 s
+    try:
+        await _get_calendars(guild.id, member.id, db_cal, use_cache=False)
+    except Exception:
+        pass
 
 
 @app_commands.guild_only()
