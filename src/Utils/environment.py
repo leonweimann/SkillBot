@@ -26,6 +26,11 @@ async def send_safe_response(interaction: discord.Interaction, content: str, eph
         content (str): The content of the response.
         ephemeral (bool): Whether the response should be ephemeral (only visible to the user).
     """
+    if interaction.response.is_done():
+        # Deferred or already answered: discord.py raises InteractionResponded client-side
+        await interaction.followup.send(content, ephemeral=ephemeral)
+        return
+
     try:
         await interaction.response.send_message(content, ephemeral=ephemeral)
     except discord.errors.HTTPException as e:
