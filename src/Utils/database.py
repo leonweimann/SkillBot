@@ -961,18 +961,53 @@ class TeacherCalendar:
             logger.error(f"Failed to delete teacher calendar {self.teacher_id} from guild {self.guild_id}: {e}")
             raise DatabaseError(f"Failed to delete teacher calendar: {e}") from e
 
+    def link(self, token_cache: str):
+        """Store the token cache of a newly linked account (creates the row if needed)"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO teacher_calendar (teacher_id, token_cache)
+                    VALUES (?, ?)
+                    ON CONFLICT (teacher_id) DO UPDATE SET
+                    token_cache = excluded.token_cache
+                ''', (self.teacher_id, token_cache))
+                conn.commit()
+            self.token_cache = token_cache
+            logger.debug(f"Linked teacher calendar {self.teacher_id} in guild {self.guild_id}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to link teacher calendar {self.teacher_id} in guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to link teacher calendar: {e}") from e
+
     def edit(self, token_cache: Optional[str] = None, calendar_id: Optional[str] = None,
              calendar_name: Optional[str] = None, last_prepared_date: Optional[str] = None):
-        """Edit teacher calendar attributes and save to database"""
-        if token_cache is not None:
-            self.token_cache = token_cache
-        if calendar_id is not None:
-            self.calendar_id = calendar_id
-        if calendar_name is not None:
-            self.calendar_name = calendar_name
-        if last_prepared_date is not None:
-            self.last_prepared_date = last_prepared_date
-        self.save()
+        """
+        Update only the given attributes of an existing row.
+
+        Never creates a row (use `link`), so a stale instance cannot resurrect a
+        disconnected calendar or overwrite columns changed concurrently.
+        """
+        changes = {
+            'token_cache': token_cache,
+            'calendar_id': calendar_id,
+            'calendar_name': calendar_name,
+            'last_prepared_date': last_prepared_date,
+        }
+        changes = {column: value for column, value in changes.items() if value is not None}
+        if not changes:
+            return
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                assignments = ', '.join(f'{column} = ?' for column in changes)  # column names are fixed above
+                cursor.execute(f'UPDATE teacher_calendar SET {assignments} WHERE teacher_id = ?',
+                               (*changes.values(), self.teacher_id))
+                conn.commit()
+            for column, value in changes.items():
+                setattr(self, column, value)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to edit teacher calendar {self.teacher_id} in guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to edit teacher calendar: {e}") from e
 
     @property
     def is_linked(self) -> bool:
