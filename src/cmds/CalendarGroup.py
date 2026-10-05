@@ -229,7 +229,7 @@ class CalendarGroup(app_commands.Group):
             f"Kalender: {db_cal.calendar_name or 'nicht ausgewählt'}",
             f"Zuletzt vorbereitet: {db_cal.last_prepared_date or 'noch nie'}",
             f'Tägliche Vorbereitung: {NIGHTLY_PREP_TIME} Uhr (Europe/Berlin)'
-            + ('' if db_cal.is_ready else ' (inaktiv, bis Konto und Kalender eingerichtet sind)'),
+            + ('' if db_cal.is_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
         ]
         await env.send_safe_response(interaction, '**Kalender-Status**\n' + '\n'.join(f'- {l}' for l in lines), ephemeral=True)
 
@@ -254,8 +254,8 @@ class CalendarGroup(app_commands.Group):
         await env.send_safe_response(
             interaction,
             env.success_response(
-                'Kalender-Verknüpfung getrennt. Die nächtliche Tagesvorbereitung findet nicht mehr statt. '
-                'Das automatische Zurückholen von Schülern bei neuen Nachrichten bleibt aktiv.'),
+                'Kalender-Verknüpfung getrennt. Ab jetzt werden nachts alle deine Schüler-Channels archiviert; '
+                'sie kommen zurück, sobald ein Schüler schreibt oder die Lounge betritt.'),
             ephemeral=True
         )
 

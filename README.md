@@ -65,24 +65,34 @@ uv run pytest -q
 
 ## Kalender-Automatik (Auto-Stash/Pop)
 
-Lehrer können ihren Microsoft-365-Kalender (Outlook) mit dem Bot verknüpfen.
+Der Bot sorgt dafür, dass in der Lehrer-Kategorie nur die Schüler-Channels liegen, die gerade gebraucht
+werden. Lehrer können dafür optional ihren Microsoft-365-Kalender (Outlook) verknüpfen.
 
-**Nachts um 04:00 Uhr (Europe/Berlin, Sommer-/Winterzeit wird berücksichtigt)** bereitet der Bot für jeden
-Lehrer mit verknüpftem und ausgewähltem Kalender die Kategorie vor:
+**Nachts um 04:00 Uhr (Europe/Berlin, Sommer-/Winterzeit wird berücksichtigt):**
 
-- Schüler mit einem Termin heute: Channel wird in die Lehrer-Kategorie verschoben (pop).
-- Alle anderen Schüler dieses Lehrers: Channel wird archiviert (stash).
+- **Ohne Kalender** (oder wenn die Microsoft-Anbindung nicht konfiguriert ist): Alle Schüler-Channels in der
+  Lehrer-Kategorie werden archiviert. Morgens ist die Kategorie leer, Lounge und Nachrichten holen die
+  Channels zurück (siehe Auto-Pop).
+- **Mit verknüpftem und ausgewähltem Kalender** wird die Kategorie für den Tag vorbereitet:
+
+  - Schüler mit einem Termin heute: Channel wird in die Lehrer-Kategorie verschoben (pop).
+  - Alle anderen Schüler dieses Lehrers: Channel wird archiviert (stash).
+  - Eine Zusammenfassung (verschoben, übersprungen, nicht zugeordnet, mehrdeutig) landet im `cmd`-Channel
+    des Lehrers.
+  - Wurde der Bot um 04:00 nicht ausgeführt, holt er die Kalender-Vorbereitung beim Start nach. Das
+    Archivieren ohne Kalender wird bewusst nicht nachgeholt: Ein Neustart tagsüber würde sonst Channels
+    laufender Stunden wegräumen.
 - `cmd` bleibt immer in der Lehrer-Kategorie.
-- Eine Zusammenfassung (verschoben, übersprungen, nicht zugeordnet, mehrdeutig) landet im `cmd`-Channel
-  des Lehrers.
-- Wurde der Bot um 04:00 nicht ausgeführt, holt er die Vorbereitung beim Start nach.
 
-**Auto-Pop:** Schreibt jemand (außer dem Lehrer) in einen archivierten Schüler-Channel, wird dieser
-automatisch zurück in die Lehrer-Kategorie geholt. Das gilt immer, für alle Lehrer, auch ohne Kalender.
-Ein nicht erkannter Termin ist also unkritisch.
+**Auto-Pop:** Ein archivierter Schüler-Channel kommt automatisch zurück in die Lehrer-Kategorie, sobald
 
-**Sicherheitsregel:** Gibt es einen Kalenderfehler (Verbindung, abgelaufener Token, ...), wird nichts
-verschoben oder archiviert. Bei abgelaufener Anmeldung meldet der Bot das im `cmd`-Channel.
+- der Schüler (oder ein verbundener Zweit-Account) den Sprachkanal `lounge` betritt, oder
+- jemand außer dem Lehrer in den Channel schreibt.
+
+Das gilt immer, für alle Lehrer, mit und ohne Kalender. Ein nicht erkannter Termin ist also unkritisch.
+
+**Sicherheitsregel:** Gibt es bei einem Lehrer mit Kalender einen Kalenderfehler (Verbindung, abgelaufener
+Token, ...), wird für ihn nichts verschoben oder archiviert. Bei abgelaufener Anmeldung meldet der Bot das im `cmd`-Channel.
 
 **Manuelles `/students stash` und `/students pop`** funktionieren weiterhin. Der nächste nächtliche Lauf
 überschreibt sie aber, es gibt kein Festpinnen.
