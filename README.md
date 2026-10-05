@@ -44,9 +44,15 @@ docker compose down           # stoppen (Daten bleiben im Volume)
 
 - Die `.env` wird zur Laufzeit übergeben (`env_file`), nicht ins Image kopiert.
 - Die SQLite-Datenbanken (inkl. Microsoft-Token) liegen im Named Volume `skillbot-data` unter `/app/data`.
-  Bestehende Daten einmalig übernehmen:
-  `docker compose cp ./data/. skillbot:/app/data/` (bei laufendem Container), danach
-  `docker compose restart`.
+  Bestehende Daten (`./data/*.db`) einmalig übernehmen, bevor der Bot zum ersten Mal startet:
+
+  ```bash
+  docker compose run --rm --no-deps --user root -v ./data:/import:ro --entrypoint sh skillbot \
+    -c 'cp -a /import/. /app/data/ && chown -R skillbot:skillbot /app/data'
+  ```
+
+  (`docker compose cp` eignet sich nicht: die Dateien gehören danach nicht dem Bot-User und sind
+  schreibgeschützt.)
 - Update: `git pull && docker compose up -d --build`.
 - `docker stop` sendet SIGINT, damit der Bot die Verbindung sauber schließt.
 
