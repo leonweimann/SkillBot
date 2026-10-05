@@ -30,6 +30,26 @@ uv run python src/main.py
   nicht angelegt und muss vorhanden sein. Die Tabellen werden beim Start automatisch erstellt.
 - Die Datenbank enthält auch die Microsoft-Token (siehe unten): `data/` privat halten, nicht committen.
 
+## Deployment (Docker)
+
+Der Bot wird als Docker-Image betrieben. Das Image installiert die Abhängigkeiten exakt aus `uv.lock`
+(ohne Dev-Gruppe) und läuft als Nicht-Root-User.
+
+```bash
+cp .env.example .env          # DISCORD_TOKEN, MS_CLIENT_ID, MS_TENANT_ID eintragen
+docker compose up -d --build  # bauen und starten (Neustart automatisch: restart: unless-stopped)
+docker compose logs -f        # Logs
+docker compose down           # stoppen (Daten bleiben im Volume)
+```
+
+- Die `.env` wird zur Laufzeit übergeben (`env_file`), nicht ins Image kopiert.
+- Die SQLite-Datenbanken (inkl. Microsoft-Token) liegen im Named Volume `skillbot-data` unter `/app/data`.
+  Bestehende Daten einmalig übernehmen:
+  `docker compose cp ./data/. skillbot:/app/data/` (bei laufendem Container), danach
+  `docker compose restart`.
+- Update: `git pull && docker compose up -d --build`.
+- `docker stop` sendet SIGINT, damit der Bot die Verbindung sauber schließt.
+
 ## Tests
 
 ```bash
