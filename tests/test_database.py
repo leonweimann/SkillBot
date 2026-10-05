@@ -1,0 +1,71 @@
+import pytest
+
+from Utils.database import (
+    DatabaseManager, Teacher, Student, TeacherCalendar, TeacherStudentConnection,
+)
+
+GUILD = 1
+
+
+@pytest.fixture(autouse=True)
+def db(tmp_path, monkeypatch):
+    path = str(tmp_path / 'test.db')
+    monkeypatch.setattr(DatabaseManager, '_DatabaseManager__get_db_path',
+                        staticmethod(lambda guild_id: path))
+    DatabaseManager.create_tables(GUILD)
+
+
+def make_teacher(tid):
+    t = Teacher(guild_id=GUILD, id=tid)
+    t.save()
+    return t
+
+
+def test_round_trip_and_edit():
+    make_teacher(10)
+    cal = TeacherCalendar(guild_id=GUILD, teacher_id=10)
+    assert not cal.is_linked and not cal.is_ready
+    cal.edit(token_cache='tok')
+    assert cal.is_linked and not cal.is_ready
+    cal.edit(calendar_id='cid', calendar_name='Cal')
+    assert cal.is_ready
+    cal.edit(last_prepared_date='2026-10-05')
+    loaded = TeacherCalendar(guild_id=GUILD, teacher_id=10)
+    assert (loaded.token_cache, loaded.calendar_id, loaded.calendar_name,
+            loaded.last_prepared_date) == ('tok', 'cid', 'Cal', '2026-10-05')
+
+
+def test_delete_and_missing_delete():
+    make_teacher(10)
+    cal = TeacherCalendar(guild_id=GUILD, teacher_id=10)
+    cal.delete()  # missing row: no error
+    cal.edit(token_cache='tok')
+    cal.delete()
+    assert TeacherCalendar.get_all(GUILD) == []
+
+
+def test_get_all():
+    for tid in (10, 11):
+        make_teacher(tid)
+        TeacherCalendar(guild_id=GUILD, teacher_id=tid).edit(token_cache=f't{tid}')
+    assert sorted(c.teacher_id for c in TeacherCalendar.get_all(GUILD)) == [10, 11]
+
+
+def test_teacher_pop_removes_calendar():
+    t = make_teacher(10)
+    TeacherCalendar(guild_id=GUILD, teacher_id=10).edit(token_cache='tok')
+    t.pop()
+    assert TeacherCalendar.get_all(GUILD) == []
+
+
+def test_find_all_by_teacher_and_channel():
+    make_teacher(10)
+    for sid, cid in ((20, 100), (21, 101)):
+        Student(guild_id=GUILD, id=sid).save()
+        TeacherStudentConnection(guild_id=GUILD, teacher_id=10, student_id=sid, channel_id=cid).save()
+    conns = TeacherStudentConnection.find_all_by_teacher(GUILD, 10)
+    assert sorted(c.student_id for c in conns) == [20, 21]
+    assert TeacherStudentConnection.find_all_by_teacher(GUILD, 99) == []
+    c = TeacherStudentConnection.find_by_channel(GUILD, 101)
+    assert (c.teacher_id, c.student_id) == (10, 21)
+    assert TeacherStudentConnection.find_by_channel(GUILD, 555) is None
