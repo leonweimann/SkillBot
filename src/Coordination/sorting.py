@@ -77,7 +77,7 @@ class ChannelSortingCoordinator:
         Note:
             discord.py offers no public bulk position API (`channel.edit(position=...)` renumbers
             the whole guild from a possibly stale cache), so the private HTTP client is used here.
-            discord.py is pinned in requirements.txt to keep this call stable.
+            discord.py is pinned in pyproject.toml to keep this call stable.
         """
         await guild._state.http.bulk_channel_update(guild.id, payload, reason=reason)
 
