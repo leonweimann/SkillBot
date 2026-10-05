@@ -82,6 +82,14 @@ Der Name wird mit dem `real_name` des Schülers im Bot verglichen:
 Tipp: Die `real_name`-Werte der Schüler müssen zu den Kalendernamen passen. Andernfalls mit
 `/students rename` korrigieren. Mit `/calendar preview` lässt sich das prüfen.
 
+Achtung: Ist in Outlook „Allen Besprechungen eine Onlinebesprechung hinzufügen“ aktiv, gilt jeder Termin als
+Teams-Meeting und wird übersprungen. Dann würden nachts alle Schüler archiviert. Die Zusammenfassung zeigt
+das als `N× online-meeting`.
+
+Bekannte Grenze: Werden in einer Nacht sehr viele Channels in ein fast volles Archiv (50 Channels) verschoben,
+kann einzelnes Verschieben fehlschlagen. Der Channel bleibt dann bis zur nächsten Nacht in der
+Lehrer-Kategorie und wird in der Zusammenfassung als fehlgeschlagen genannt.
+
 ### Microsoft-Entra-App registrieren
 
 Einmalig pro Microsoft-365-Business-Mandant (Admin-Zugang nötig). Die Bezeichnungen im Portal können
