@@ -84,3 +84,11 @@ def test_edit_never_resurrects_and_keeps_other_columns():
     fresh.delete()
     stale.edit(last_prepared_date='2026-10-05')  # e.g. a prep finishing after disconnect
     assert TeacherCalendar.get_all(GUILD) == []
+
+
+def test_get_all_teacher_ids_only_with_category():
+    for tid, category in ((10, 500), (11, None), (12, 501)):
+        t = Teacher(guild_id=GUILD, id=tid)
+        t.teaching_category = category
+        t.save()
+    assert sorted(DatabaseManager.get_all_teacher_ids(GUILD)) == [10, 12]

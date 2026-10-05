@@ -156,6 +156,18 @@ class DatabaseManager:
             logger.error(f"Failed to get teaching categories for guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to retrieve teaching categories: {e}") from e
 
+    @staticmethod
+    def get_all_teacher_ids(guild_id: int) -> List[int]:
+        """Get the IDs of all teachers that have a teaching category"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT user_id FROM teachers WHERE teaching_category IS NOT NULL')
+                return [int(row[0]) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get teacher IDs for guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to retrieve teacher IDs: {e}") from e
+
 # endregion
 
 
