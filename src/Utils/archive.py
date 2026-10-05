@@ -190,7 +190,7 @@ class ArchiveCategory:
         """
         return channel not in self.category.channels and len(self.category.channels) < ArchiveCategory._MAX_CAPACITY
 
-    async def add_channel(self, channel: discord.TextChannel):
+    async def add_channel(self, channel: discord.TextChannel) -> discord.CategoryChannel:
         """
         Adds a channel to the archive category if it can be added.
 
@@ -200,18 +200,23 @@ class ArchiveCategory:
         Args:
             channel (discord.TextChannel): The channel to add to the archive category.
 
+        Returns:
+            discord.CategoryChannel: The archive category the channel was moved into.
+
         Raises:
             CodeError: If the channel is already in the archive category or if the category is full.
         """
         if self.can_add(channel):
             # Connect channel to this archive category
             await channel.edit(category=self.category)
+            return self.category
         else:
             # Create new archive and add the channel there
             new_archive = await ArchiveCategory.make(self.guild)
             if new_archive.can_add(channel):
                 # Connect to new archive category
                 await channel.edit(category=new_archive.category)
+                return new_archive.category
             else:
                 # If this archive and an new archive cannot add the channel, raise an error
                 raise CodeError(
