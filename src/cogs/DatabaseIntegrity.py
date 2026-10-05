@@ -37,9 +37,10 @@ class DatabaseIntegrity(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'[COG] {self.__class__.__name__} is ready')
-        # Start the weekly integrity check task
-        if not self.weekly_integrity_check.is_running():
-            self.weekly_integrity_check.start()
+        # Weekly integrity check is deactivated, it only spammed the alerts channel.
+        # Re-enable by starting the task again:
+        # if not self.weekly_integrity_check.is_running():
+        #     self.weekly_integrity_check.start()
 
     @tasks.loop(time=time(hour=22, minute=0, tzinfo=timezone.utc))
     async def weekly_integrity_check(self):
