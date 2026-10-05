@@ -321,3 +321,43 @@ def test_get_json_other_error_includes_status_and_excerpt():
     assert len(message) < 400
 
 # endregion
+
+
+def test_acquire_token_transient_error_is_not_an_auth_error(configured, monkeypatch):
+    result = {'error': 'temporarily_unavailable', 'error_description': 'try again later'}
+    monkeypatch.setattr(msgraph, '_build_app', lambda cache: FakeApp(cache, accounts=[{'username': 'x'}], result=result))
+    with pytest.raises(msgraph.GraphError, match='try again later'):
+        asyncio.run(msgraph._acquire_token(FakeDbCal(token_cache='{}')))
+
+
+def test_get_events_rejects_response_without_value_list(monkeypatch):
+    _use_session(monkeypatch, FakeSession([FakeResponse(json_data={'unexpected': True})]))
+    _use_token(monkeypatch)
+    tz = timezone(timedelta(hours=2))
+    start = datetime(2026, 10, 5, tzinfo=tz)
+    with pytest.raises(msgraph.GraphError, match='value'):
+        asyncio.run(msgraph.get_events(FakeDbCal(), start, start + timedelta(days=1)))
+
+
+def test_cancelling_complete_device_flow_expires_the_flow(configured, monkeypatch):
+    import threading
+    release = threading.Event()
+
+    class App:
+        def acquire_token_by_device_flow(self, flow):
+            release.wait(5)
+            return {'error': 'expired'}
+
+    monkeypatch.setattr(msgraph, '_build_app', lambda cache: App())
+    flow = {'user_code': 'ABC', 'expires_at': 9999999999}
+
+    async def run():
+        task = asyncio.create_task(msgraph.complete_device_flow(flow))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+
+    asyncio.run(run())
+    assert flow['expires_at'] == 0
