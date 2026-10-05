@@ -37,6 +37,8 @@ class AutoPop(commands.Cog):
             return
 
         channel = message.channel
+        if isinstance(channel, discord.Thread):  # A reply in a thread counts for its student channel
+            channel = channel.parent
         if not isinstance(channel, discord.TextChannel):
             return
 
