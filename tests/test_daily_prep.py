@@ -167,6 +167,210 @@ def test_missing_teacher_category_raises_code_error(env):
 # endregion
 
 
+# region stash_all
+
+def test_stash_all_archives_only_teacher_category_and_never_pops(env):
+    cmd = FakeChannel(13, 'cmd', TEACHER_CATEGORY_ID)
+    foreign = FakeChannel(14, 'fremder-channel', TEACHER_CATEGORY_ID)
+    env.guild.text_channels.extend([cmd, foreign])
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.stashed == ['bert-mueller']
+    assert result.popped == [] and result.failed == [] and result.missing == []
+    assert env.bert.edits[0]['category'].id == ARCHIVE_CATEGORY_ID
+    assert env.anna.edits == []  # archived student with no calendar is never popped
+    assert cmd.edits == [] and foreign.edits == []
+    assert sorted(env.sorted) == [TEACHER_CATEGORY_ID, ARCHIVE_CATEGORY_ID]
+    assert env.db_cal.edits == []  # calendar data untouched
+
+
+def test_stash_all_does_not_fetch_calendar(env, monkeypatch):
+    async def failing_get_events(cal, start, end):
+        raise AssertionError('calendar must not be fetched')
+
+    monkeypatch.setattr(msgraph, 'get_events', failing_get_events)
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+    assert result.stashed == ['bert-mueller']
+
+
+def test_stash_all_collects_failures_without_logging(env, monkeypatch):
+    logged = []
+
+    async def recording_log(guild, message, details={}):
+        logged.append(message)
+
+    async def failing_edit(**kwargs):
+        raise RuntimeError('kaputt')
+
+    monkeypatch.setattr(daily_prep, 'log', recording_log)
+    env.bert.edit = failing_edit
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.failed == ['bert-mueller']
+    assert result.stashed == []
+    assert logged == []  # the caller writes the single log entry
+
+
+def test_stash_all_nothing_to_do(env):
+    env.bert.category_id = ARCHIVE_CATEGORY_ID
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.stashed == [] and result.popped == []
+    assert env.sorted == []
+
+
+def test_stash_all_missing_teacher_category_raises_code_error(env):
+    env.guild.categories = []
+    with pytest.raises(daily_prep.CodeError):
+        asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+
+def test_format_stash_details():
+    result = PrepResult(plan=DayPlan(), stashed=['bert-mueller', 'a`b'], failed=['carl'])
+    details = daily_prep.format_stash_details(TEACHER_ID, result)
+    assert details == {
+        'Lehrer': f'<@{TEACHER_ID}>',
+        'Archiviert': "2: bert-mueller, a'b",
+        'Fehlgeschlagen': '1: carl',
+    }
+
+# endregion
+
+
+# region DailyPreparation cog
+
+CALENDAR_TEACHER = 31
+PLAIN_TEACHER = 32      # teacher row, no calendar row
+LINKED_TEACHER = 33     # linked account, but no calendar selected
+
+
+@pytest.fixture
+def cog_env(monkeypatch):
+    from cogs import DailyPreparation as cog_module
+
+    calendars = {
+        CALENDAR_TEACHER: FakeDbCal(ready=True),
+        PLAIN_TEACHER: FakeDbCal(ready=False),
+        LINKED_TEACHER: FakeDbCal(ready=False),
+    }
+    for cal in calendars.values():
+        cal.last_prepared_date = None
+    calls = []
+    logged = []
+    stash_results = {}
+
+    async def fake_prepare(guild, teacher_id, day, dry_run=False):
+        calls.append(('prepare', teacher_id))
+        return PrepResult(plan=DayPlan())
+
+    async def fake_stash_all(guild, teacher_id):
+        calls.append(('stash', teacher_id))
+        return stash_results.get(teacher_id, PrepResult(plan=DayPlan()))
+
+    async def fake_log(guild, message, details={}):
+        logged.append((message, details))
+
+    members = {CALENDAR_TEACHER, PLAIN_TEACHER, LINKED_TEACHER}
+    guild = SimpleNamespace(id=5, name='Server', get_member=lambda uid: object() if uid in members else None)
+
+    monkeypatch.setattr(cog_module, 'DatabaseManager',
+                        SimpleNamespace(get_all_teacher_ids=lambda g: list(calendars)))
+    monkeypatch.setattr(cog_module, 'TeacherCalendar', lambda g, t: calendars[t])
+    monkeypatch.setattr(cog_module, 'prepare_teacher', fake_prepare)
+    monkeypatch.setattr(cog_module, 'stash_all', fake_stash_all)
+    monkeypatch.setattr(cog_module, 'get_cmd_channel', lambda g, t: None)
+    monkeypatch.setattr(cog_module, 'log', fake_log)
+    monkeypatch.setattr(msgraph, 'is_configured', lambda: True)
+
+    cog = cog_module.DailyPreparation(SimpleNamespace(guilds=[guild]))
+    return SimpleNamespace(cog=cog, calls=calls, logged=logged, calendars=calendars, members=members,
+                           stash_results=stash_results, guild=guild)
+
+
+def test_nightly_dispatches_calendar_teachers_to_prepare_and_others_to_stash_all(cog_env):
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+    assert sorted(cog_env.calls) == [
+        ('prepare', CALENDAR_TEACHER), ('stash', PLAIN_TEACHER), ('stash', LINKED_TEACHER)
+    ]
+
+
+def test_catch_up_never_stashes(cog_env):
+    asyncio.run(cog_env.cog._run_all(catch_up=True))
+    assert cog_env.calls == [('prepare', CALENDAR_TEACHER)]
+
+
+def test_catch_up_skips_teachers_prepared_today(cog_env, monkeypatch):
+    from cogs import DailyPreparation as cog_module
+
+    class FakeDateTime:
+        @staticmethod
+        def now(tz=None):
+            return daily_prep.datetime(2026, 10, 5, 9, 0, tzinfo=tz)
+
+    monkeypatch.setattr(cog_module, 'datetime', FakeDateTime)
+    cog_env.calendars[CALENDAR_TEACHER].last_prepared_date = '2026-10-05'
+    asyncio.run(cog_env.cog._run_all(catch_up=True))
+    assert cog_env.calls == []
+
+
+def test_graph_not_configured_stashes_everyone(cog_env, monkeypatch):
+    monkeypatch.setattr(msgraph, 'is_configured', lambda: False)
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+    assert sorted(cog_env.calls) == [
+        ('stash', CALENDAR_TEACHER), ('stash', PLAIN_TEACHER), ('stash', LINKED_TEACHER)
+    ]
+
+
+def test_graph_not_configured_catch_up_does_nothing(cog_env, monkeypatch):
+    monkeypatch.setattr(msgraph, 'is_configured', lambda: False)
+    asyncio.run(cog_env.cog._run_all(catch_up=True))
+    assert cog_env.calls == []
+
+
+def test_stash_all_logs_once_only_when_something_happened(cog_env):
+    cog_env.stash_results[PLAIN_TEACHER] = PrepResult(plan=DayPlan(), stashed=['bert-mueller'], failed=['carl'])
+
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+
+    stash_logs = [details for message, details in cog_env.logged if 'Archivieren' in message]
+    assert stash_logs == [{
+        'Lehrer': f'<@{PLAIN_TEACHER}>',
+        'Archiviert': '1: bert-mueller',
+        'Fehlgeschlagen': '1: carl',
+    }]
+
+
+def test_non_member_teacher_is_skipped_and_logged_once(cog_env):
+    cog_env.members.discard(PLAIN_TEACHER)
+
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+
+    assert ('stash', PLAIN_TEACHER) not in cog_env.calls
+    skipped = [m for m, d in cog_env.logged if 'übersprungen' in m]
+    assert len(skipped) == 1
+
+
+def test_stash_all_error_is_reported_once_per_day(cog_env, monkeypatch):
+    from cogs import DailyPreparation as cog_module
+
+    async def failing_stash_all(guild, teacher_id):
+        raise daily_prep.CodeError('Lehrer hat keine Kategorie')
+
+    monkeypatch.setattr(cog_module, 'stash_all', failing_stash_all)
+
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+
+    errors = [d['Lehrer'] for m, d in cog_env.logged if 'fehlgeschlagen' in m]
+    assert sorted(errors) == [f'<@{PLAIN_TEACHER}>', f'<@{LINKED_TEACHER}>']
+
+# endregion
+
+
 # region pop_to_teacher
 
 def test_pop_archived_channel(env, monkeypatch):
