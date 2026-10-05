@@ -1,0 +1,13 @@
+# Only pyproject.toml, uv.lock and src/ are needed for the image
+.git
+.venv
+.env
+.env.*
+!.env.example
+data
+tests
+docs
+**/__pycache__
+**/*.py[cod]
+.DS_Store
+.vscode

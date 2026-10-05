@@ -1,0 +1,11 @@
+services:
+  skillbot:
+    build: .
+    image: skillbot:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - skillbot-data:/app/data
+
+volumes:
+  skillbot-data:
