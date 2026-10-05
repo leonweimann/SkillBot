@@ -129,6 +129,16 @@ class DatabaseManager:
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS teacher_calendar (
+                        teacher_id INTEGER PRIMARY KEY,
+                        token_cache TEXT,
+                        calendar_id TEXT,
+                        calendar_name TEXT,
+                        last_prepared_date TEXT,
+                        FOREIGN KEY (teacher_id) REFERENCES teachers (user_id)
+                    )
+                ''')
                 conn.commit()
                 logger.info(f"Database tables created successfully for guild {guild_id}")
         except sqlite3.Error as e:
@@ -449,6 +459,7 @@ class Teacher(User):
         try:
             with DatabaseManager._connect(self.guild_id) as conn:
                 cursor = conn.cursor()
+                cursor.execute('DELETE FROM teacher_calendar WHERE teacher_id = ?', (self.id,))
                 cursor.execute('DELETE FROM teachers WHERE user_id = ?', (self.id,))
                 if cursor.rowcount == 0:
                     raise TeacherNotFoundError(f"Teacher {self.id} not found in guild {self.guild_id}")
@@ -841,6 +852,110 @@ class Archive:
         except sqlite3.Error as e:
             logger.error(f"Failed to get all archives for guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to retrieve archives: {e}") from e
+
+# endregion
+
+
+# region TeacherCalendar
+
+@dataclass
+class TeacherCalendar:
+    """Calendar link of a teacher.
+
+    The teacher must already exist in the `teachers` table before `save()` is
+    called (foreign key constraints are enabled).
+    """
+    guild_id: int
+    teacher_id: int
+    token_cache: Optional[str] = field(default=None)
+    calendar_id: Optional[str] = field(default=None)
+    calendar_name: Optional[str] = field(default=None)
+    last_prepared_date: Optional[str] = field(default=None)  # ISO date (YYYY-MM-DD)
+
+    def __post_init__(self):
+        """Load teacher calendar data from database"""
+        self.load()
+
+    def load(self):
+        """Load teacher calendar data from database"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT token_cache, calendar_id, calendar_name, last_prepared_date FROM teacher_calendar WHERE teacher_id = ?', (self.teacher_id,))
+                row = cursor.fetchone()
+                if row:
+                    self.token_cache, self.calendar_id, self.calendar_name, self.last_prepared_date = row
+        except sqlite3.Error as e:
+            logger.error(f"Failed to load teacher calendar {self.teacher_id} from guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to load teacher calendar data: {e}") from e
+
+    def save(self):
+        """Save teacher calendar data to database"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO teacher_calendar (teacher_id, token_cache, calendar_id, calendar_name, last_prepared_date)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (teacher_id) DO UPDATE SET
+                    token_cache = excluded.token_cache,
+                    calendar_id = excluded.calendar_id,
+                    calendar_name = excluded.calendar_name,
+                    last_prepared_date = excluded.last_prepared_date
+                ''', (self.teacher_id, self.token_cache, self.calendar_id, self.calendar_name, self.last_prepared_date))
+                conn.commit()
+                logger.debug(f"Saved teacher calendar {self.teacher_id} in guild {self.guild_id}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to save teacher calendar {self.teacher_id} in guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to save teacher calendar data: {e}") from e
+
+    def delete(self):
+        """Delete teacher calendar from database (no error if missing)"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM teacher_calendar WHERE teacher_id = ?', (self.teacher_id,))
+                conn.commit()
+                logger.info(f"Deleted teacher calendar {self.teacher_id} from guild {self.guild_id}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to delete teacher calendar {self.teacher_id} from guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to delete teacher calendar: {e}") from e
+
+    def edit(self, token_cache: Optional[str] = None, calendar_id: Optional[str] = None,
+             calendar_name: Optional[str] = None, last_prepared_date: Optional[str] = None):
+        """Edit teacher calendar attributes and save to database"""
+        if token_cache is not None:
+            self.token_cache = token_cache
+        if calendar_id is not None:
+            self.calendar_id = calendar_id
+        if calendar_name is not None:
+            self.calendar_name = calendar_name
+        if last_prepared_date is not None:
+            self.last_prepared_date = last_prepared_date
+        self.save()
+
+    @property
+    def is_linked(self) -> bool:
+        """Whether a calendar account is linked (token present)"""
+        return bool(self.token_cache)
+
+    @property
+    def is_ready(self) -> bool:
+        """Whether account is linked and a calendar is selected"""
+        return bool(self.token_cache and self.calendar_id)
+
+    @staticmethod
+    def get_all(guild_id: int) -> List['TeacherCalendar']:
+        """Get all teacher calendars for a guild"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT teacher_id FROM teacher_calendar')
+                teacher_ids = [row[0] for row in cursor.fetchall()]
+            return [TeacherCalendar(guild_id=guild_id, teacher_id=tid) for tid in teacher_ids]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get all teacher calendars for guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to retrieve teacher calendars: {e}") from e
 
 # endregion
 
