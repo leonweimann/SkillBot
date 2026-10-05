@@ -156,6 +156,18 @@ def test_missing_channel_is_skipped(env):
     assert result.missing == ['Anna Meier']
     assert result.popped == []
     assert result.stashed == ['bert-mueller']
+    assert any('nicht gefunden' in message for message in env.logs)
+
+
+def test_failed_archive_is_logged_by_prepare_teacher(env):
+    async def failing_edit(**kwargs):
+        raise RuntimeError('kaputt')
+    env.bert.edit = failing_edit
+
+    result = asyncio.run(daily_prep.prepare_teacher(env.guild, TEACHER_ID, DAY))
+
+    assert result.failed == ['bert-mueller']
+    assert any('nicht archivieren' in message for message in env.logs)
 
 
 def test_calendar_not_ready_raises_usage_error(env):
