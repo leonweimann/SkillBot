@@ -22,7 +22,7 @@ from Coordination.schedule import CalendarEvent, DayPlan, compute_moves, plan_da
 from Coordination.sorting import channel_sorting_coordinator
 from Utils import msgraph
 from Utils.archive import ArchiveCategory
-from Utils.database import Archive, Student, Teacher, TeacherCalendar, TeacherStudentConnection
+from Utils.database import Archive, Student, Subuser, Teacher, TeacherCalendar, TeacherStudentConnection
 from Utils.errors import CodeError, UsageError
 from Utils.lwlogging import log
 
@@ -238,7 +238,26 @@ async def prepare_teacher(guild: discord.Guild, teacher_id: int, day: date, dry_
     return result
 
 
-async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection) -> bool:
+LOUNGE_CHANNEL_NAME = 'lounge'  # Voice channel that serves as the waiting room
+
+
+def resolve_student_id(guild_id: int, member_id: int) -> int:
+    """
+    Maps a connected sub-account to its main user.
+
+    Args:
+        guild_id (int): The ID of the guild.
+        member_id (int): The ID of the member.
+
+    Returns:
+        int: The ID of the main user if the member is a sub-account, otherwise ``member_id``.
+    """
+    user = Subuser.get_user_of_subuser(guild_id, member_id)
+    return user.id if user is not None else member_id
+
+
+async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection,
+                         reason: str = 'Auto-Pop: Nachricht im archivierten Channel') -> bool:
     """
     Moves an archived student channel back into its teacher's category.
 
@@ -247,6 +266,7 @@ async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection)
     Args:
         guild (discord.Guild): The guild of the channel.
         ts_con (TeacherStudentConnection): The connection of the student channel.
+        reason (str): Reason shown in Discord's audit log.
 
     Returns:
         bool: True if the channel was moved, False if it was not in an archive category
@@ -268,7 +288,7 @@ async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection)
         if teacher_category is None:
             raise CodeError(f"Lehrer {ts_con.teacher_id} hat keine Kategorie")
 
-        await channel.edit(category=teacher_category, reason='Auto-Pop: Nachricht im archivierten Channel')
+        await channel.edit(category=teacher_category, reason=reason)
         await _safe_sort(guild, teacher_category)
     return True
 
