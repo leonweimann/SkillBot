@@ -71,8 +71,8 @@ werden. Lehrer können dafür optional ihren Microsoft-365-Kalender (Outlook) ve
 **Nachts um 04:00 Uhr (Europe/Berlin, Sommer-/Winterzeit wird berücksichtigt):**
 
 - **Ohne Kalender** (oder wenn die Microsoft-Anbindung nicht konfiguriert ist): Alle Schüler-Channels in der
-  Lehrer-Kategorie werden archiviert. Morgens ist die Kategorie leer, Lounge und Nachrichten holen die
-  Channels zurück (siehe Auto-Pop).
+  Lehrer-Kategorie werden archiviert, außer von Schülern, die gerade in der Lounge warten. Morgens ist die
+  Kategorie leer, Lounge und Nachrichten holen die Channels zurück (siehe Auto-Pop).
 - **Mit verknüpftem und ausgewähltem Kalender** wird die Kategorie für den Tag vorbereitet:
 
   - Schüler mit einem Termin heute: Channel wird in die Lehrer-Kategorie verschoben (pop).

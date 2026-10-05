@@ -53,7 +53,9 @@ def env(monkeypatch):
     # anna has an appointment but is archived, bert has none but is in the teacher category
     anna = FakeChannel(11, 'anna-meier', ARCHIVE_CATEGORY_ID)
     bert = FakeChannel(12, 'bert-mueller', TEACHER_CATEGORY_ID)
-    guild = SimpleNamespace(id=5, categories=[teacher_category, archive_category], text_channels=[anna, bert])
+    lounge = SimpleNamespace(name='lounge', members=[])
+    guild = SimpleNamespace(id=5, categories=[teacher_category, archive_category], text_channels=[anna, bert],
+                            voice_channels=[lounge])
 
     db_cal = FakeDbCal()
     sorted_categories = []
@@ -78,8 +80,10 @@ def env(monkeypatch):
         async def sort_channels_in_category(self, category):
             sorted_categories.append(category.id)
 
-    async def fake_log(*args, **kwargs):
-        pass
+    logs = []
+
+    async def fake_log(guild, message, details={}):
+        logs.append(message)
 
     connections = [
         SimpleNamespace(student_id=21, channel_id=11, teacher_id=TEACHER_ID),
@@ -98,9 +102,10 @@ def env(monkeypatch):
     monkeypatch.setattr(daily_prep, 'channel_sorting_coordinator', FakeSorter())
     monkeypatch.setattr(daily_prep, 'log', fake_log)
     monkeypatch.setattr(msgraph, 'get_events', fake_get_events)
+    monkeypatch.setattr(daily_prep.Subuser, 'get_user_of_subuser', lambda g, m: None)
 
     return SimpleNamespace(guild=guild, anna=anna, bert=bert, db_cal=db_cal, sorted=sorted_categories,
-                           connections=connections)
+                           connections=connections, lounge=lounge, logs=logs)
 
 # endregion
 
@@ -451,5 +456,44 @@ def test_summary_truncates_long_lists():
     assert len(text) < 2000
     assert 'weitere' in text
     assert 'Hereingeholt (300)' in text
+
+# endregion
+
+
+# region lounge
+
+def test_stash_all_keeps_students_waiting_in_lounge(env):
+    env.lounge.members.append(SimpleNamespace(id=22, bot=False))  # bert waits in the lounge
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.stashed == []
+    assert env.bert.edits == []
+
+
+def test_lounge_sub_account_keeps_main_student(env, monkeypatch):
+    monkeypatch.setattr(daily_prep.Subuser, 'get_user_of_subuser',
+                        lambda g, m: SimpleNamespace(id=22) if m == 99 else None)
+    env.lounge.members.append(SimpleNamespace(id=99, bot=False))  # bert's second account
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.stashed == []
+
+
+def test_prepare_teacher_pops_student_waiting_in_lounge(env):
+    env.lounge.members.append(SimpleNamespace(id=22, bot=False))  # no appointment, but waiting
+
+    result = asyncio.run(daily_prep.prepare_teacher(env.guild, TEACHER_ID, DAY))
+
+    assert result.popped == ['anna-meier']
+    assert result.stashed == []  # bert stays in the teacher category
+
+
+def test_students_in_lounge_ignores_bots_and_missing_lounge(env):
+    env.lounge.members.extend([SimpleNamespace(id=21, bot=False), SimpleNamespace(id=1, bot=True)])
+    assert daily_prep.students_in_lounge(env.guild) == {21}
+    env.guild.voice_channels = []
+    assert daily_prep.students_in_lounge(env.guild) == set()
 
 # endregion

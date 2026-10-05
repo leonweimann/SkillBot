@@ -163,8 +163,12 @@ async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category
         reason (str): The audit log reason for the channel edits.
         log_problems (bool): Whether every missing channel and failed move is logged individually.
             If False, problems are only collected in ``result`` (the caller reports them).
+
+    Students currently waiting in the lounge always count as targets. They are read under the lock, so
+    a lounge pop that ran just before can never be undone by this run.
     """
     async with get_guild_lock(guild.id):
+        target_student_ids = target_student_ids | students_in_lounge(guild)
         channels: dict[int, discord.TextChannel] = {}
         moves_input: list[tuple[int, int, Optional[int]]] = []
         for con in connections:
@@ -288,8 +292,8 @@ async def stash_all(guild: discord.Guild, teacher_id: int) -> PrepResult:
     Archives every student channel that is currently in the teacher's category.
 
     Used at night for teachers without a ready calendar. The ``cmd`` channel and channels that do not
-    belong to a student of the teacher stay untouched, nothing is popped and the calendar data
-    (``last_prepared_date``) is not touched. Missing channels and failed moves are only collected in the
+    belong to a student of the teacher stay untouched, and the calendar data (``last_prepared_date``) is
+    not touched. Students waiting in the lounge are the only exception: their channel stays (or is popped). Missing channels and failed moves are only collected in the
     result, not logged individually.
 
     Args:
@@ -332,6 +336,18 @@ def resolve_student_id(guild_id: int, member_id: int) -> int:
     """
     user = Subuser.get_user_of_subuser(guild_id, member_id)
     return user.id if user is not None else member_id
+
+
+def students_in_lounge(guild: discord.Guild) -> set[int]:
+    """
+    Returns the ids of the students currently waiting in the lounge (from the cache).
+
+    Connected sub-accounts are resolved to their main student; bots are ignored.
+    """
+    lounge = discord.utils.get(guild.voice_channels, name=LOUNGE_CHANNEL_NAME)
+    if lounge is None:
+        return set()
+    return {resolve_student_id(guild.id, member.id) for member in lounge.members if not member.bot}
 
 
 async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection,
