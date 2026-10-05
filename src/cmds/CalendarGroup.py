@@ -229,7 +229,7 @@ class CalendarGroup(app_commands.Group):
             f"Kalender: {db_cal.calendar_name or 'nicht ausgewählt'}",
             f"Zuletzt vorbereitet: {db_cal.last_prepared_date or 'noch nie'}",
             f'Tägliche Vorbereitung: {NIGHTLY_PREP_TIME} Uhr (Europe/Berlin)'
-            + ('' if db_cal.is_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
+            + ('' if msgraph.is_configured() and db_cal.is_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
         ]
         await env.send_safe_response(interaction, '**Kalender-Status**\n' + '\n'.join(f'- {l}' for l in lines), ephemeral=True)
 

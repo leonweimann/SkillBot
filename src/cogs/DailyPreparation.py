@@ -99,6 +99,7 @@ class DailyPreparation(commands.Cog):
                     continue
 
                 for teacher_id in teacher_ids:
+                    task_name = 'Tagesvorbereitung'
                     try:
                         db_cal = TeacherCalendar(guild.id, teacher_id)
                         if graph_configured and db_cal.is_ready:
@@ -108,13 +109,14 @@ class DailyPreparation(commands.Cog):
                         elif not catch_up:
                             # Never in the catch-up: a restart during the day would archive channels
                             # that were popped back for lessons in progress
+                            task_name = 'Nächtliches Archivieren'
                             await self._stash_all_and_log(guild, teacher_id, today)
                     except Exception as e:  # Never let one teacher stop the others
                         if not self._first_report(guild.id, teacher_id, today):
                             continue
                         await self._safe_log(
                             guild,
-                            '[ERROR] Tagesvorbereitung fehlgeschlagen',
+                            f'[ERROR] {task_name} fehlgeschlagen',
                             {'Lehrer': f'<@{teacher_id}>', 'error': str(e)}
                         )
 
@@ -142,7 +144,7 @@ class DailyPreparation(commands.Cog):
             return
         if (result.failed or result.missing) and not self._first_report(guild.id, teacher_id, today):
             return
-        await self._safe_log(guild, 'Nächtliches Archivieren (ohne Kalender)', format_stash_details(teacher_id, result))
+        await self._safe_log(guild, 'Nächtliches Archivieren', format_stash_details(teacher_id, result))
 
     async def _prepare_and_report(self, guild: discord.Guild, teacher_id: int, today: date):
         """Prepares one teacher and posts the result (or an error notice) into their cmd channel."""
