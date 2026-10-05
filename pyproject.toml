@@ -1,0 +1,25 @@
+[project]
+name = "skillbot"
+version = "0.1.0"
+description = "Discord bot for the SkillBot tutoring server"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Pinned: channel sorting relies on discord.py's internal bulk channel position endpoint
+    "discord.py==2.7.1",
+    "msal==1.35.0",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.uv]
+# Application, not an installable package: run with `uv run python src/main.py`
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
