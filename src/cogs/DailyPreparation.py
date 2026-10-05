@@ -3,9 +3,9 @@ import discord
 from discord.ext import commands, tasks
 from datetime import date, datetime, time
 
-from Coordination.daily_prep import BERLIN, format_summary, get_cmd_channel, prepare_teacher
+from Coordination.daily_prep import BERLIN, format_stash_details, format_summary, get_cmd_channel, prepare_teacher, stash_all
 from Utils import msgraph
-from Utils.database import TeacherCalendar
+from Utils.database import DatabaseManager, TeacherCalendar
 from Utils.lwlogging import log
 
 
@@ -14,10 +14,15 @@ PREPARATION_TIME = time(4, 0, tzinfo=BERLIN)
 
 class DailyPreparation(commands.Cog):
     """
-    Prepares the categories of all teachers with a linked calendar every night at 04:00 Europe/Berlin.
+    Prepares the categories of all teachers every night at 04:00 Europe/Berlin.
 
-    Students with an appointment today get their channel moved into the teacher's category, all other
-    students of that teacher get archived. A summary is posted into the teacher's ``cmd`` channel.
+    Teachers with a ready calendar: students with an appointment today get their channel moved into the
+    teacher's category, all other students of that teacher get archived. A summary is posted into the
+    teacher's ``cmd`` channel.
+
+    Teachers without a ready calendar (or if Microsoft Graph is not configured): all student channels in
+    the teacher's category get archived. Nothing is posted into the ``cmd`` channel, only the logs channel
+    gets an entry if something was archived or failed.
     """
 
     def __init__(self, bot):
@@ -46,72 +51,104 @@ class DailyPreparation(commands.Cog):
             self.daily_preparation.start()
 
         # Catch-up: the bot was offline at 04:00 (on_ready can fire multiple times on reconnects,
-        # already prepared teachers are skipped)
+        # already prepared teachers are skipped). Calendar teachers only: teachers without a calendar
+        # are not archived here, see _run_all
         if datetime.now(BERLIN).time() >= time(4, 0):
-            await self._run_all(skip_prepared_today=True)
+            await self._run_all(catch_up=True)
 
     @tasks.loop(time=PREPARATION_TIME)
     async def daily_preparation(self):
         """
-        Prepares all teachers with a linked calendar for today.
+        Prepares all teachers for today.
         This task is scheduled to run at 04:00 Europe/Berlin (DST-aware).
         """
         self._debug_print('Running daily_preparation task')
         # The nightly run always prepares, even if /calendar prepare-now ran after midnight
-        await self._run_all(skip_prepared_today=False)
+        await self._run_all(catch_up=False)
         self._debug_print('Finished daily_preparation loop.')
 
     @daily_preparation.before_loop
     async def before_daily_preparation(self):
         await self.bot.wait_until_ready()
 
-    async def _run_all(self, skip_prepared_today: bool):
+    async def _run_all(self, catch_up: bool):
         """
-        Runs the preparation for every guild and every ready teacher calendar.
+        Runs the preparation for every guild and every teacher.
+
+        Teachers with a ready calendar (and Microsoft Graph configured) get the calendar preparation,
+        all other teachers get all their student channels archived.
 
         Args:
-            skip_prepared_today (bool): Skip teachers already prepared today (catch-up), so repeated
-                on_ready events never prepare a teacher twice.
+            catch_up (bool): Catch-up on start: only teachers with a ready calendar that were not prepared
+                today yet are handled, so repeated on_ready events never prepare a teacher twice.
+                Teachers without a calendar are never archived in the catch-up: after a restart during
+                the day this would archive channels the auto-pop brought back for running lessons.
         """
-        if not msgraph.is_configured():
-            self._debug_print('Microsoft Graph is not configured, skipping')
+        graph_configured = msgraph.is_configured()
+        if catch_up and not graph_configured:
+            self._debug_print('Microsoft Graph is not configured, skipping the catch-up')
             return
 
         async with self._run_lock:
             today = datetime.now(BERLIN).date()
             for guild in self.bot.guilds:
                 try:
-                    calendars = TeacherCalendar.get_all(guild.id)
+                    teacher_ids = DatabaseManager.get_all_teacher_ids(guild.id)
                 except Exception as e:
-                    await self._safe_log(guild, '[ERROR] Tagesvorbereitung: Kalender konnten nicht geladen werden', {'error': str(e)})
+                    await self._safe_log(guild, '[ERROR] Tagesvorbereitung: Lehrer konnten nicht geladen werden', {'error': str(e)})
                     continue
 
-                for db_cal in calendars:
-                    if not db_cal.is_ready:
-                        continue
-                    if skip_prepared_today and db_cal.last_prepared_date == today.isoformat():
-                        continue
+                for teacher_id in teacher_ids:
                     try:
-                        await self._prepare_and_report(guild, db_cal.teacher_id, today)
+                        db_cal = TeacherCalendar(guild.id, teacher_id)
+                        if graph_configured and db_cal.is_ready:
+                            if catch_up and db_cal.last_prepared_date == today.isoformat():
+                                continue
+                            await self._prepare_and_report(guild, teacher_id, today)
+                        elif not catch_up:
+                            # Never in the catch-up: a restart during the day would archive channels
+                            # that were popped back for lessons in progress
+                            await self._stash_all_and_log(guild, teacher_id, today)
                     except Exception as e:  # Never let one teacher stop the others
-                        if not self._first_report(guild.id, db_cal.teacher_id, today):
+                        if not self._first_report(guild.id, teacher_id, today):
                             continue
                         await self._safe_log(
                             guild,
                             '[ERROR] Tagesvorbereitung fehlgeschlagen',
-                            {'Lehrer': f'<@{db_cal.teacher_id}>', 'error': str(e)}
+                            {'Lehrer': f'<@{teacher_id}>', 'error': str(e)}
                         )
 
-    async def _prepare_and_report(self, guild: discord.Guild, teacher_id: int, today: date):
-        """Prepares one teacher and posts the result (or an error notice) into their cmd channel."""
-        self._debug_print(f'Preparing teacher {teacher_id} in guild {guild.name}')
-
-        if guild.get_member(teacher_id) is None:
+    async def _skip_non_member(self, guild: discord.Guild, teacher_id: int, today: date) -> bool:
+        """Returns True (and logs once per day) if the teacher is no longer a member of the guild."""
+        if guild.get_member(teacher_id) is not None:
+            return False
+        if self._first_report(guild.id, teacher_id, today):
             await self._safe_log(
                 guild,
                 'Tagesvorbereitung übersprungen: Lehrer ist nicht (mehr) auf dem Server',
                 {'Lehrer': f'<@{teacher_id}>', 'ID': str(teacher_id)}
             )
+        return True
+
+    async def _stash_all_and_log(self, guild: discord.Guild, teacher_id: int, today: date):
+        """Archives all student channels of a teacher without calendar; reports only to the logs channel."""
+        self._debug_print(f'Stashing all channels of teacher {teacher_id} in guild {guild.name}')
+
+        if await self._skip_non_member(guild, teacher_id, today):
+            return
+
+        result = await stash_all(guild, teacher_id)
+        if not (result.stashed or result.failed or result.missing):
+            return
+        if (result.failed or result.missing) and not self._first_report(guild.id, teacher_id, today):
+            return
+        await self._safe_log(guild, 'Nächtliches Archivieren (ohne Kalender)', format_stash_details(teacher_id, result))
+
+    async def _prepare_and_report(self, guild: discord.Guild, teacher_id: int, today: date):
+        """Prepares one teacher and posts the result (or an error notice) into their cmd channel."""
+        self._debug_print(f'Preparing teacher {teacher_id} in guild {guild.name}')
+
+        if await self._skip_non_member(guild, teacher_id, today):
             return
 
         cmd_channel = get_cmd_channel(guild, teacher_id)

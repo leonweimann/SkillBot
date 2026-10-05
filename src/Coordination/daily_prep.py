@@ -2,8 +2,9 @@
 Calendar-driven preparation of a teacher's category.
 
 `prepare_teacher` moves the channels of students with an appointment today into the teacher's
-category and archives all other channels of that teacher. `pop_to_teacher` moves a single archived
-channel back into its teacher's category (used by the auto-pop on message).
+category and archives all other channels of that teacher. `stash_all` archives every student channel
+in a teacher's category (nightly run for teachers without a calendar). `pop_to_teacher` moves a single
+archived channel back into its teacher's category (used by the auto-pop).
 
 All channel moves of a guild are serialised by `get_guild_lock`.
 """
@@ -129,6 +130,99 @@ class PrepResult:
     failed: list[str] = field(default_factory=list)    # channel names whose move failed
 
 
+def _load_students(guild: discord.Guild, teacher_id: int) -> tuple[list[TeacherStudentConnection], dict[int, Optional[str]]]:
+    """Returns the teacher's student connections and the students' real names (student_id -> name)."""
+    connections = TeacherStudentConnection.find_all_by_teacher(guild.id, teacher_id)
+    student_names: dict[int, Optional[str]] = {
+        con.student_id: Student(guild.id, con.student_id).real_name for con in connections
+    }
+    return connections, student_names
+
+
+async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category: discord.CategoryChannel,
+                         connections: list[TeacherStudentConnection], student_names: dict[int, Optional[str]],
+                         target_student_ids: set[int], result: PrepResult, *, dry_run: bool, reason: str,
+                         log_problems: bool):
+    """
+    Moves the teacher's channels so that exactly the target students are in the teacher's category.
+
+    Channels of target students outside the teacher category are popped, channels of all other students
+    inside the teacher category are archived; everything else (``cmd``, foreign channels, already archived
+    channels) stays untouched. Runs under the guild lock and fills ``result`` in place.
+
+    Args:
+        guild (discord.Guild): The guild of the teacher.
+        teacher_id (int): The ID of the teacher.
+        teacher_category (discord.CategoryChannel): The teacher's teaching category.
+        connections (list[TeacherStudentConnection]): The teacher's student connections.
+        student_names (dict[int, Optional[str]]): student_id -> real name (used for missing channels).
+        target_student_ids (set[int]): Students whose channel belongs into the teacher category.
+            An empty set archives every student channel of the teacher category.
+        result (PrepResult): Receives the (planned) moves, missing channels and failures.
+        dry_run (bool): If True, only record what would be moved.
+        reason (str): The audit log reason for the channel edits.
+        log_problems (bool): Whether every missing channel and failed move is logged individually.
+            If False, problems are only collected in ``result`` (the caller reports them).
+    """
+    async with get_guild_lock(guild.id):
+        channels: dict[int, discord.TextChannel] = {}
+        moves_input: list[tuple[int, int, Optional[int]]] = []
+        for con in connections:
+            channel = discord.utils.get(guild.text_channels, id=con.channel_id)
+            if channel is None:
+                result.missing.append(student_names.get(con.student_id) or str(con.student_id))
+                if log_problems:
+                    await _safe_log(
+                        guild,
+                        f"Channel für Schüler <@{con.student_id}> nicht gefunden, sollte aber `{con.channel_id}` sein",
+                        {'Lehrer': f'<@{teacher_id}>', 'Vorgang': 'Tagesvorbereitung'}
+                    )
+                continue
+            channels[channel.id] = channel
+            moves_input.append((con.student_id, channel.id, channel.category_id))
+
+        pop_ids, stash_ids = compute_moves(moves_input, teacher_category.id, target_student_ids)
+
+        if dry_run:
+            result.popped = [channels[cid].name for cid in pop_ids]
+            result.stashed = [channels[cid].name for cid in stash_ids]
+            return
+
+        for cid in pop_ids:
+            channel = channels[cid]
+            try:
+                await channel.edit(category=teacher_category, reason=reason)
+                result.popped.append(channel.name)
+            except Exception as e:
+                result.failed.append(channel.name)
+                if log_problems:
+                    await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht in die Lehrer-Kategorie verschieben", {'error': str(e)})
+                else:
+                    print(f'[daily_prep] Failed to move channel {channel.id} into the teacher category: {e}')
+
+        touched_archives: dict[int, discord.CategoryChannel] = {}
+        for cid in stash_ids:
+            channel = channels[cid]
+            try:
+                # Re-make per channel so a full archive rolls over to a new one
+                archive = await ArchiveCategory.make(guild)
+                archive_category = await archive.add_channel(channel)
+                touched_archives[archive_category.id] = archive_category
+                result.stashed.append(channel.name)
+            except Exception as e:
+                result.failed.append(channel.name)
+                if log_problems:
+                    await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht archivieren", {'error': str(e)})
+                else:
+                    print(f'[daily_prep] Failed to archive channel {channel.id}: {e}')
+
+        # Sorting fetches fresh channel data itself (the cache lags behind the HTTP calls)
+        if result.popped or result.stashed:
+            await _safe_sort(guild, teacher_category)
+        for category in touched_archives.values():
+            await _safe_sort(guild, category)
+
+
 async def prepare_teacher(guild: discord.Guild, teacher_id: int, day: date, dry_run: bool = False) -> PrepResult:
     """
     Prepares the teacher's category for the given day based on the linked calendar.
@@ -172,69 +266,53 @@ async def prepare_teacher(guild: discord.Guild, teacher_id: int, day: date, dry_
     events = [CalendarEvent.from_graph(e) for e in raw_events]
 
     # 2. Plan the day
-    connections = TeacherStudentConnection.find_all_by_teacher(guild.id, teacher_id)
-    student_names: dict[int, Optional[str]] = {
-        con.student_id: Student(guild.id, con.student_id).real_name for con in connections
-    }
+    connections, student_names = _load_students(guild, teacher_id)
     plan = plan_day(events, {sid: name for sid, name in student_names.items() if name})
     result = PrepResult(plan=plan)
 
     # 3. Move channels
-    async with get_guild_lock(guild.id):
-        channels: dict[int, discord.TextChannel] = {}
-        moves_input: list[tuple[int, int, Optional[int]]] = []
-        for con in connections:
-            channel = discord.utils.get(guild.text_channels, id=con.channel_id)
-            if channel is None:
-                result.missing.append(student_names.get(con.student_id) or str(con.student_id))
-                await _safe_log(
-                    guild,
-                    f"Channel für Schüler <@{con.student_id}> nicht gefunden, sollte aber `{con.channel_id}` sein",
-                    {'Lehrer': f'<@{teacher_id}>', 'Vorgang': 'Tagesvorbereitung'}
-                )
-                continue
-            channels[channel.id] = channel
-            moves_input.append((con.student_id, channel.id, channel.category_id))
-
-        pop_ids, stash_ids = compute_moves(moves_input, teacher_category.id, plan.student_ids)
-
-        if dry_run:
-            result.popped = [channels[cid].name for cid in pop_ids]
-            result.stashed = [channels[cid].name for cid in stash_ids]
-            return result
-
-        reason = f'Tagesvorbereitung {day.isoformat()}'
-
-        for cid in pop_ids:
-            channel = channels[cid]
-            try:
-                await channel.edit(category=teacher_category, reason=reason)
-                result.popped.append(channel.name)
-            except Exception as e:
-                result.failed.append(channel.name)
-                await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht in die Lehrer-Kategorie verschieben", {'error': str(e)})
-
-        touched_archives: dict[int, discord.CategoryChannel] = {}
-        for cid in stash_ids:
-            channel = channels[cid]
-            try:
-                # Re-make per channel so a full archive rolls over to a new one
-                archive = await ArchiveCategory.make(guild)
-                archive_category = await archive.add_channel(channel)
-                touched_archives[archive_category.id] = archive_category
-                result.stashed.append(channel.name)
-            except Exception as e:
-                result.failed.append(channel.name)
-                await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht archivieren", {'error': str(e)})
-
-        # Sorting fetches fresh channel data itself (the cache lags behind the HTTP calls)
-        if result.popped or result.stashed:
-            await _safe_sort(guild, teacher_category)
-        for category in touched_archives.values():
-            await _safe_sort(guild, category)
+    await _move_channels(
+        guild, teacher_id, teacher_category, connections, student_names, plan.student_ids, result,
+        dry_run=dry_run, reason=f'Tagesvorbereitung {day.isoformat()}', log_problems=True
+    )
+    if dry_run:
+        return result
 
     # 4. Remember the prepared day
     db_cal.edit(last_prepared_date=day.isoformat())
+    return result
+
+
+async def stash_all(guild: discord.Guild, teacher_id: int) -> PrepResult:
+    """
+    Archives every student channel that is currently in the teacher's category.
+
+    Used at night for teachers without a ready calendar. The ``cmd`` channel and channels that do not
+    belong to a student of the teacher stay untouched, nothing is popped and the calendar data
+    (``last_prepared_date``) is not touched. Missing channels and failed moves are only collected in the
+    result, not logged individually.
+
+    Args:
+        guild (discord.Guild): The guild of the teacher.
+        teacher_id (int): The ID of the teacher.
+
+    Returns:
+        PrepResult: An empty day plan and the archived, missing and failed channels.
+
+    Raises:
+        CodeError: If the teacher has no teaching category.
+    """
+    teacher_category = _get_teacher_category(guild, teacher_id)
+    if teacher_category is None:
+        raise CodeError(f"Lehrer {teacher_id} hat keine Kategorie")
+
+    connections, student_names = _load_students(guild, teacher_id)
+    result = PrepResult(plan=DayPlan())
+    await _move_channels(
+        guild, teacher_id, teacher_category, connections, student_names, set(), result,
+        dry_run=False, reason=f'Nächtliches Archivieren {datetime.now(BERLIN).date().isoformat()}',
+        log_problems=False
+    )
     return result
 
 
@@ -317,6 +395,42 @@ def _join_limited(items: list[str], limit: int = _LIST_CHAR_LIMIT) -> str:
         parts.append(piece)
         length += extra
     return ', '.join(parts)
+
+
+def _join_plain(items: list[str], limit: int = _LIST_CHAR_LIMIT) -> str:
+    """Joins items with commas (no markdown, for code blocks), truncated with a "+n weitere" suffix."""
+    parts: list[str] = []
+    length = 0
+    for index, item in enumerate(items):
+        piece = ' '.join(str(item).split()).replace('`', "'")[:_ITEM_CHAR_LIMIT]
+        extra = len(piece) + (2 if parts else 0)
+        if length + extra > limit:
+            parts.append(f'… (+{len(items) - index} weitere)')
+            break
+        parts.append(piece)
+        length += extra
+    return ', '.join(parts)
+
+
+def format_stash_details(teacher_id: int, result: PrepResult) -> dict[str, str]:
+    """
+    Formats the log details of a nightly `stash_all` run (compact, German).
+
+    Args:
+        teacher_id (int): The ID of the teacher.
+        result (PrepResult): The result of `stash_all`.
+
+    Returns:
+        dict[str, str]: Details for the logs channel; empty groups are left out.
+    """
+    details = {'Lehrer': f'<@{teacher_id}>'}
+    if result.stashed:
+        details['Archiviert'] = f'{len(result.stashed)}: {_join_plain(result.stashed)}'
+    if result.failed:
+        details['Fehlgeschlagen'] = f'{len(result.failed)}: {_join_plain(result.failed)}'
+    if result.missing:
+        details['Nicht gefunden'] = f'{len(result.missing)}: {_join_plain(result.missing)}'
+    return details
 
 
 def format_summary(result: PrepResult, dry_run: bool) -> str:
