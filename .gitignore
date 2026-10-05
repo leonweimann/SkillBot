@@ -19,3 +19,6 @@ env/
 .vscode/
 # Ignore uv/venv environment
 .venv/
+
+# Local design docs, not part of the repository
+docs/
