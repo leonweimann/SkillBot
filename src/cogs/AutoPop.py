@@ -1,12 +1,9 @@
 import discord
 from discord.ext import commands
 
-from Coordination.daily_prep import is_archived_category, pop_to_teacher
-from Utils.database import Subuser, TeacherStudentConnection
+from Coordination.daily_prep import LOUNGE_CHANNEL_NAME, is_archived_category, pop_to_teacher, resolve_student_id
+from Utils.database import TeacherStudentConnection
 from Utils.lwlogging import log
-
-LOUNGE_CHANNEL_NAME = 'lounge'  # Voice channel that serves as the waiting room
-
 
 def joined_lounge(before_channel, after_channel) -> bool:
     """
@@ -23,21 +20,6 @@ def joined_lounge(before_channel, after_channel) -> bool:
     if after_channel is None or after_channel.name != LOUNGE_CHANNEL_NAME:
         return False
     return before_channel is None or before_channel.id != after_channel.id
-
-
-def resolve_student_id(guild_id: int, member_id: int) -> int:
-    """
-    Maps a connected sub-account to its main user.
-
-    Args:
-        guild_id (int): The ID of the guild.
-        member_id (int): The ID of the member.
-
-    Returns:
-        int: The ID of the main user if the member is a sub-account, otherwise ``member_id``.
-    """
-    user = Subuser.get_user_of_subuser(guild_id, member_id)
-    return user.id if user is not None else member_id
 
 
 class AutoPop(commands.Cog):
@@ -128,7 +110,7 @@ class AutoPop(commands.Cog):
             if channel is None or not is_archived_category(guild, channel.category_id):
                 return
 
-            if await pop_to_teacher(guild, ts_con):
+            if await pop_to_teacher(guild, ts_con, reason='Auto-Pop: Lounge betreten'):
                 self._debug_print(f'Popped {channel.name} in guild {guild.name}')
                 await log(
                     guild,
