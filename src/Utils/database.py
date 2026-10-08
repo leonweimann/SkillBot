@@ -39,6 +39,15 @@ class ArchiveNotFoundError(DatabaseError):
     """Raised when an archive is not found in the database"""
     pass
 
+
+class TeacherHasStudentsError(DatabaseError):
+    """Raised when a teacher who still has students would be purged"""
+
+    def __init__(self, teacher_id: int, student_count: int):
+        super().__init__(f"Teacher {teacher_id} still has {student_count} student(s)")
+        self.teacher_id = teacher_id
+        self.student_count = student_count
+
 # endregion
 
 
@@ -174,6 +183,62 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.error(f"Failed to get teacher IDs for guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to retrieve teacher IDs: {e}") from e
+
+    # Tables cleared by `purge_user`, in foreign key safe order (children before parents)
+    PURGE_STATEMENTS: tuple[tuple[str, str], ...] = (
+        ('teacher_student', 'DELETE FROM teacher_student WHERE student_id = ?'),
+        ('students', 'DELETE FROM students WHERE user_id = ?'),
+        ('subusers', 'DELETE FROM subusers WHERE user_id = ?1 OR subuser_id = ?1'),
+        ('user_voice_channel_join', 'DELETE FROM user_voice_channel_join WHERE user_id = ?'),
+        ('dev_mode', 'DELETE FROM dev_mode WHERE user_id = ?'),
+        ('teacher_calendar', 'DELETE FROM teacher_calendar WHERE teacher_id = ?'),
+        ('teacher_settings', 'DELETE FROM teacher_settings WHERE teacher_id = ?'),
+        ('teachers', 'DELETE FROM teachers WHERE user_id = ?'),
+        ('users', 'DELETE FROM users WHERE id = ?'),
+    )
+
+    @staticmethod
+    def purge_user(guild_id: int, user_id: int) -> dict[str, int]:
+        """
+        Removes every database entry of a member who left the server, in one transaction.
+
+        Deletes the user's student connections, the student row, subuser relations (as main or as sub
+        account), voice channel joins, dev mode, and (if the user is a teacher without students) the
+        teacher's calendar, settings and teacher row, then the user row itself. Either everything is
+        deleted or nothing.
+
+        Args:
+            guild_id (int): The ID of the guild.
+            user_id (int): The ID of the departed member.
+
+        Returns:
+            dict[str, int]: Number of deleted rows per table (all zero if the user had no entries).
+
+        Raises:
+            TeacherHasStudentsError: If the user is a teacher who still has students (nothing is deleted).
+            DatabaseError: If a statement fails (the transaction is rolled back).
+        """
+        conn = DatabaseManager._connect(guild_id)
+        try:
+            with conn:  # Commits on success, rolls back on any exception
+                cursor = conn.cursor()
+                cursor.execute('BEGIN IMMEDIATE')  # Check and deletes see the same state
+                cursor.execute('SELECT COUNT(*) FROM teacher_student WHERE teacher_id = ?', (user_id,))
+                student_count = cursor.fetchone()[0]
+                if student_count:
+                    raise TeacherHasStudentsError(user_id, student_count)
+
+                deleted: dict[str, int] = {}
+                for table, statement in DatabaseManager.PURGE_STATEMENTS:
+                    cursor.execute(statement, (user_id,))
+                    deleted[table] = cursor.rowcount
+            logger.info(f"Purged user {user_id} from guild {guild_id}: {deleted}")
+            return deleted
+        except sqlite3.Error as e:
+            logger.error(f"Failed to purge user {user_id} from guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to purge user: {e}") from e
+        finally:
+            conn.close()
 
 # endregion
 
@@ -753,6 +818,22 @@ class TeacherStudentConnection:
         except sqlite3.Error as e:
             logger.error(f"Failed to find connection for channel {channel_id} in guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to find teacher-student connection: {e}") from e
+
+    @staticmethod
+    def get_all(guild_id: int) -> List['TeacherStudentConnection']:
+        """Get all teacher-student connections of a guild"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT teacher_id, student_id, channel_id FROM teacher_student')
+                rows = cursor.fetchall()
+            return [
+                TeacherStudentConnection(guild_id=guild_id, teacher_id=row[0], student_id=row[1], channel_id=row[2])
+                for row in rows
+            ]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get all teacher-student connections for guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to retrieve teacher-student connections: {e}") from e
 
 # endregion
 
