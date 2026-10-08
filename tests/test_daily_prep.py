@@ -421,6 +421,48 @@ def test_pop_not_archived_channel(env, monkeypatch):
     assert env.bert.edits == []
 
 
+@pytest.mark.parametrize('error', [server_error(), ConnectionResetError(104, 'Connection reset by peer')])
+def test_pop_to_teacher_retries_transient_error_once(env, monkeypatch, error):
+    async def fetch_channel(channel_id):
+        return env.anna
+
+    calls = []
+
+    async def flaky_edit(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise error
+
+    env.guild.fetch_channel = fetch_channel
+    env.anna.edit = flaky_edit
+    monkeypatch.setattr(daily_prep.discord, 'TextChannel', FakeChannel)
+
+    assert asyncio.run(daily_prep.pop_to_teacher(env.guild, env.connections[0])) is True
+    assert len(calls) == 2
+    assert calls[-1]['category'].id == TEACHER_CATEGORY_ID
+    assert env.sorted == [TEACHER_CATEGORY_ID]
+
+
+def test_pop_to_teacher_does_not_retry_non_transient_error(env, monkeypatch):
+    async def fetch_channel(channel_id):
+        return env.anna
+
+    calls = []
+
+    async def forbidden_edit(**kwargs):
+        calls.append(kwargs)
+        raise http_error(403, 50013, message='Missing Permissions')
+
+    env.guild.fetch_channel = fetch_channel
+    env.anna.edit = forbidden_edit
+    monkeypatch.setattr(daily_prep.discord, 'TextChannel', FakeChannel)
+
+    with pytest.raises(daily_prep.discord.HTTPException):
+        asyncio.run(daily_prep.pop_to_teacher(env.guild, env.connections[0]))
+    assert len(calls) == 1
+    assert env.sorted == []
+
+
 def test_is_archived_category(env):
     assert daily_prep.is_archived_category(env.guild, ARCHIVE_CATEGORY_ID)
     assert not daily_prep.is_archived_category(env.guild, TEACHER_CATEGORY_ID)
@@ -507,6 +549,17 @@ def test_prepare_teacher_pops_student_waiting_in_lounge(env):
 
     assert result.popped == ['anna-meier']
     assert result.stashed == []  # bert stays in the teacher category
+
+
+def test_prepare_teacher_pops_archived_student_waiting_in_lounge(env):
+    env.bert.category_id = ARCHIVE_CATEGORY_ID  # bert has no appointment and is archived
+    env.lounge.members.append(SimpleNamespace(id=22, bot=False))  # but waits in the lounge
+
+    result = asyncio.run(daily_prep.prepare_teacher(env.guild, TEACHER_ID, DAY))
+
+    assert sorted(result.popped) == ['anna-meier', 'bert-mueller']
+    assert result.stashed == []
+    assert env.bert.edits[0]['category'].id == TEACHER_CATEGORY_ID
 
 
 def test_students_in_lounge_ignores_bots_and_missing_lounge(env):
