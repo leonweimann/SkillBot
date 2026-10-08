@@ -9,7 +9,9 @@ import pytest
 from Coordination import daily_prep
 from Coordination.daily_prep import PrepResult, format_summary
 from Coordination.schedule import DayPlan
-from Utils import msgraph
+from Utils import archive as archive_mod
+from Utils import channel_moves, msgraph
+from tests.archive_fakes import FakeArchiveTable, FakeGuild, http_error, server_error
 
 
 TEACHER_ID = 1
@@ -64,17 +66,20 @@ def env(monkeypatch):
     async def fake_get_events(cal, start, end):
         return events
 
-    class FakeArchiveCategory:
-        def __init__(self):
-            self.category = archive_category
+    archived = []  # channel names in the order they were handed to the allocator
+    create_errors = []  # errors raised by the next allocator creations
 
+    class FakeArchiveAllocator:
         @classmethod
-        async def make(cls, guild):
+        async def create(cls, guild):
+            if create_errors:
+                raise create_errors.pop(0)
             return cls()
 
-        async def add_channel(self, channel):
-            await channel.edit(category=self.category)
-            return self.category
+        async def archive(self, channel, *, reason=None):
+            archived.append(channel.name)
+            await channel.edit(category=archive_category, reason=reason)
+            return archive_category
 
     class FakeSorter:
         async def sort_channels_in_category(self, category):
@@ -98,14 +103,16 @@ def env(monkeypatch):
                         SimpleNamespace(find_all_by_teacher=lambda g, t: connections))
     monkeypatch.setattr(daily_prep, 'Archive',
                         SimpleNamespace(get_all=lambda g: [SimpleNamespace(id=ARCHIVE_CATEGORY_ID)]))
-    monkeypatch.setattr(daily_prep, 'ArchiveCategory', FakeArchiveCategory)
+    monkeypatch.setattr(daily_prep, 'ArchiveAllocator', FakeArchiveAllocator)
+    monkeypatch.setattr(channel_moves, 'TRANSIENT_RETRY_DELAY', 0)
     monkeypatch.setattr(daily_prep, 'channel_sorting_coordinator', FakeSorter())
     monkeypatch.setattr(daily_prep, 'log', fake_log)
     monkeypatch.setattr(msgraph, 'get_events', fake_get_events)
     monkeypatch.setattr(daily_prep.Subuser, 'get_user_of_subuser', lambda g, m: None)
 
     return SimpleNamespace(guild=guild, anna=anna, bert=bert, db_cal=db_cal, sorted=sorted_categories,
-                           connections=connections, lounge=lounge, logs=logs)
+                           connections=connections, lounge=lounge, logs=logs, archived=archived,
+                           names=names, create_errors=create_errors)
 
 # endregion
 
@@ -507,5 +514,199 @@ def test_students_in_lounge_ignores_bots_and_missing_lounge(env):
     assert daily_prep.students_in_lounge(env.guild) == {21}
     env.guild.voice_channels = []
     assert daily_prep.students_in_lounge(env.guild) == set()
+
+# endregion
+
+
+# region move failures & retries
+
+def test_transient_pop_error_is_retried_once(env):
+    calls = []
+
+    async def flaky_edit(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise server_error()
+    env.anna.edit = flaky_edit
+
+    result = asyncio.run(daily_prep.prepare_teacher(env.guild, TEACHER_ID, DAY))
+
+    assert result.popped == ['anna-meier'] and result.failed == []
+    assert len(calls) == 2
+
+
+def test_non_transient_pop_error_is_not_retried(env):
+    calls = []
+
+    async def forbidden_edit(**kwargs):
+        calls.append(kwargs)
+        raise http_error(403, 50013, message='Missing Permissions')
+    env.anna.edit = forbidden_edit
+
+    result = asyncio.run(daily_prep.prepare_teacher(env.guild, TEACHER_ID, DAY))
+
+    assert result.failed == ['anna-meier']
+    assert result.failure_reasons == {'anna-meier': 'HTTP 403 (50013): Missing Permissions'}
+    assert len(calls) == 1
+    assert any('Lehrer-Kategorie' in message for message in env.logs)
+
+
+def test_stash_all_records_failure_reasons_for_the_logs_entry(env):
+    async def failing_edit(**kwargs):
+        raise RuntimeError('kaputt')
+    env.bert.edit = failing_edit
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.failure_reasons == {'bert-mueller': 'RuntimeError: kaputt'}
+    details = daily_prep.format_stash_details(TEACHER_ID, result)
+    assert details['Fehlgeschlagen'] == '1: bert-mueller'
+    assert details['Fehler'] == 'bert-mueller: RuntimeError: kaputt'
+
+
+def test_failed_allocator_creation_fails_every_stash_without_moving(env):
+    env.create_errors.append(server_error())
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.failed == ['bert-mueller'] and result.stashed == []
+    assert result.failure_reasons['bert-mueller'].startswith('HTTP 503')
+    assert env.bert.edits == []
+
+
+def test_format_stash_details_truncates_long_reasons():
+    failed = [f'schueler-{i:03d}' for i in range(50)]
+    reasons = {name: 'HTTP 400 (50035): In parent_id: Maximum number of channels in category reached (50)'
+               for name in failed}
+    details = daily_prep.format_stash_details(TEACHER_ID, PrepResult(plan=DayPlan(), failed=failed,
+                                                                     failure_reasons=reasons))
+    assert len(details['Fehler']) < 600
+    assert 'weitere' in details['Fehler']
+    assert 'Maximum number of channels in category reached (50)' in details['Fehler']
+
+# endregion
+
+
+# region lounge re-check
+
+def test_student_joining_the_lounge_during_the_run_is_not_archived(env):
+    carl = FakeChannel(13, 'carl-schmidt', TEACHER_CATEGORY_ID)
+    env.guild.text_channels.append(carl)
+    env.connections.append(SimpleNamespace(student_id=23, channel_id=13, teacher_id=TEACHER_ID))
+    env.names[23] = 'Carl Schmidt'
+
+    async def edit_and_carl_joins_lounge(**kwargs):
+        env.bert.edits.append(kwargs)
+        env.lounge.members.append(SimpleNamespace(id=23, bot=False))  # carl joins while bert is archived
+    env.bert.edit = edit_and_carl_joins_lounge
+
+    result = asyncio.run(daily_prep.stash_all(env.guild, TEACHER_ID))
+
+    assert result.stashed == ['bert-mueller']
+    assert result.failed == []
+    assert carl.edits == []
+    assert env.archived == ['bert-mueller']
+
+# endregion
+
+
+# region end-to-end with a lagging cache
+
+ARCHIVE_B_ID = 300
+
+
+@pytest.fixture
+def lagging(monkeypatch):
+    """A guild whose cache never catches up during the run, with the real ArchiveAllocator."""
+    guild = FakeGuild()
+    table = FakeArchiveTable()
+    guild.add_category(TEACHER_CATEGORY_ID, 'Lehrer')
+    guild.add_category(ARCHIVE_CATEGORY_ID, '📚 Wissensbereich')
+    guild.add_category(ARCHIVE_B_ID, '🗃️ Wissenskammer')
+    table.rows[ARCHIVE_CATEGORY_ID] = '📚 Wissensbereich'
+    table.rows[ARCHIVE_B_ID] = '🗃️ Wissenskammer'
+    guild.add_channel(1, 'cmd', TEACHER_CATEGORY_ID)
+
+    connections = []
+    names = {}
+
+    def add_student(student_id, name, category_id):
+        channel = guild.add_channel(student_id, name.lower().replace(' ', '-'), category_id)
+        connections.append(SimpleNamespace(student_id=student_id, channel_id=channel.id, teacher_id=TEACHER_ID))
+        names[student_id] = name
+        return channel
+
+    sorted_categories = []
+
+    class FakeSorter:
+        async def sort_channels_in_category(self, category):
+            sorted_categories.append(category.id)
+
+    async def fake_log(guild, message, details={}):
+        pass
+
+    async def fake_get_events(cal, start, end):
+        return [{'subject': 'Mathematik mit Anna Meier'}]
+
+    monkeypatch.setattr(archive_mod, 'Archive', table)
+    monkeypatch.setattr(daily_prep, 'Archive', table)
+    monkeypatch.setattr(daily_prep, 'TeacherCalendar', lambda g, t: FakeDbCal())
+    monkeypatch.setattr(daily_prep, 'Teacher', lambda g, t: SimpleNamespace(teaching_category=TEACHER_CATEGORY_ID))
+    monkeypatch.setattr(daily_prep, 'Student', lambda g, s: SimpleNamespace(real_name=names[s]))
+    monkeypatch.setattr(daily_prep, 'TeacherStudentConnection',
+                        SimpleNamespace(find_all_by_teacher=lambda g, t: connections))
+    monkeypatch.setattr(daily_prep, 'channel_sorting_coordinator', FakeSorter())
+    monkeypatch.setattr(daily_prep, 'log', fake_log)
+    monkeypatch.setattr(msgraph, 'get_events', fake_get_events)
+    monkeypatch.setattr(daily_prep.Subuser, 'get_user_of_subuser', lambda g, m: None)
+    monkeypatch.setattr(channel_moves, 'TRANSIENT_RETRY_DELAY', 0)
+
+    return SimpleNamespace(guild=guild, add_student=add_student, sorted=sorted_categories)
+
+
+def test_stash_all_overflows_into_next_archive_with_lagging_cache(lagging):
+    lagging.guild.fill(ARCHIVE_CATEGORY_ID, 49, start=2000)
+    lagging.guild.fill(ARCHIVE_B_ID, 10, start=3000)
+    for i in range(5):
+        lagging.add_student(40 + i, f'Schueler {i}', TEACHER_CATEGORY_ID)
+
+    result = asyncio.run(daily_prep.stash_all(lagging.guild, TEACHER_ID))
+
+    assert result.failed == []
+    assert len(result.stashed) == 5
+    assert lagging.guild.server_count(ARCHIVE_CATEGORY_ID) == 50
+    assert lagging.guild.server_count(ARCHIVE_B_ID) == 14
+    assert len(lagging.guild.edit_calls) == 5  # Discord never rejected a move
+    assert sorted(set(lagging.sorted)) == [TEACHER_CATEGORY_ID, ARCHIVE_CATEGORY_ID, ARCHIVE_B_ID]
+
+
+def test_prepare_teacher_refills_slot_freed_by_pop_with_lagging_cache(lagging):
+    lagging.guild.fill(ARCHIVE_CATEGORY_ID, 49, start=2000)
+    anna = lagging.add_student(21, 'Anna Meier', ARCHIVE_CATEGORY_ID)  # archive A is full (50)
+    for i in range(3):
+        lagging.add_student(40 + i, f'Schueler {i}', TEACHER_CATEGORY_ID)
+
+    result = asyncio.run(daily_prep.prepare_teacher(lagging.guild, TEACHER_ID, DAY))
+
+    assert result.popped == ['anna-meier']
+    assert result.failed == [] and len(result.stashed) == 3
+    assert lagging.guild.server_parent[anna.id] == TEACHER_CATEGORY_ID
+    # The slot freed by the pop is used again, the rest overflows into archive B
+    assert lagging.guild.server_count(ARCHIVE_CATEGORY_ID) == 50
+    assert lagging.guild.server_count(ARCHIVE_B_ID) == 2
+    assert len(lagging.guild.edit_calls) == 4
+    assert lagging.guild.fetches == 1
+
+
+def test_all_archives_full_creates_new_archive_during_stash_all(lagging):
+    lagging.guild.fill(ARCHIVE_CATEGORY_ID, 50, start=2000)
+    lagging.guild.fill(ARCHIVE_B_ID, 50, start=3000)
+    for i in range(2):
+        lagging.add_student(40 + i, f'Schueler {i}', TEACHER_CATEGORY_ID)
+
+    result = asyncio.run(daily_prep.stash_all(lagging.guild, TEACHER_ID))
+
+    assert result.failed == [] and len(result.stashed) == 2
+    assert lagging.guild.created == ['🗄️ Wissensspeicher']
 
 # endregion
