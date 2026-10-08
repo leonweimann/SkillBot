@@ -129,7 +129,7 @@ Archive fassen höchstens 50 Channels (Discord-Grenze). Der Bot zählt die freie
 anhand der aktuellen Daten von Discord (nicht anhand seines Zwischenspeichers). Ist ein Archiv voll, kommt der
 Channel ins nächste Archiv, bei Bedarf legt der Bot ein neues an. Schlägt ein Verschieben trotzdem fehl
 (z. B. Netzwerkfehler auch nach einem zweiten Versuch), bleibt der Channel bis zur nächsten Nacht in der
-Lehrer-Kategorie und wird mit kurzem Grund als fehlgeschlagen genannt.
+Lehrer-Kategorie und wird als fehlgeschlagen genannt; den Grund schreibt der Bot in den `logs`-Channel.
 
 ### Microsoft-Entra-App registrieren
 
