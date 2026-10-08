@@ -13,6 +13,7 @@ from Utils.database import Teacher, TeacherCalendar, TeacherSettings
 from Utils.errors import UsageError
 
 CALENDAR_CACHE_TTL_SECONDS = 60
+SUMMARY_NEEDS_CALENDAR_HINT = 'wird nur mit verknüpftem und ausgewähltem Kalender gepostet'
 NIGHTLY_PREP_TIME = '04:00'
 
 # (guild_id, user_id) -> (timestamp, [(calendar_id, calendar_name)])
@@ -224,14 +225,18 @@ class CalendarGroup(app_commands.Group):
     async def status(self, interaction: discord.Interaction):
         db_cal = TeacherCalendar(interaction.guild.id, interaction.user.id)
         settings = TeacherSettings(interaction.guild.id, interaction.user.id)
+        calendar_ready = msgraph.is_configured() and db_cal.is_ready
+        summary_line = f"Tägliche Zusammenfassung im cmd: {'an' if settings.daily_summary else 'aus'}"
+        if settings.daily_summary and not calendar_ready:
+            summary_line += f' ({SUMMARY_NEEDS_CALENDAR_HINT})'
         lines = [
             f"Microsoft-Anbindung konfiguriert: {'ja' if msgraph.is_configured() else 'nein'}",
             f"Konto verknüpft: {'ja' if db_cal.is_linked else 'nein'}",
             f"Kalender: {db_cal.calendar_name or 'nicht ausgewählt'}",
             f"Zuletzt vorbereitet: {db_cal.last_prepared_date or 'noch nie'}",
             f'Tägliche Vorbereitung: {NIGHTLY_PREP_TIME} Uhr (Europe/Berlin)'
-            + ('' if msgraph.is_configured() and db_cal.is_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
-            f"Tägliche Zusammenfassung im cmd: {'an' if settings.daily_summary else 'aus'}",
+            + ('' if calendar_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
+            summary_line,
         ]
         await env.send_safe_response(interaction, '**Kalender-Status**\n' + '\n'.join(f'- {l}' for l in lines), ephemeral=True)
 
@@ -257,7 +262,10 @@ class CalendarGroup(app_commands.Group):
 
         TeacherSettings(interaction.guild.id, interaction.user.id).set_daily_summary(enabled)
         if enabled:
-            text = 'Die nächtliche Zusammenfassung wird wieder in deinen `cmd`-Channel gepostet.'
+            text = 'Die nächtliche Zusammenfassung wird in deinen `cmd`-Channel gepostet.'
+            db_cal = TeacherCalendar(interaction.guild.id, interaction.user.id)
+            if not (msgraph.is_configured() and db_cal.is_ready):
+                text += f' Hinweis: Sie {SUMMARY_NEEDS_CALENDAR_HINT}.'
         else:
             text = ('Die nächtliche Zusammenfassung wird nicht mehr in deinen `cmd`-Channel gepostet. '
                     'Die Tagesvorbereitung läuft weiter, `/calendar preview` und `/calendar prepare-now` antworten '

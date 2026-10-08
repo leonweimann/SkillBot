@@ -356,6 +356,22 @@ def test_nightly_summary_not_sent_when_disabled(cog_env, cmd_channels, catch_up)
     assert not any('cmd' in message for message, details in cog_env.logged)
 
 
+def test_nightly_summary_sent_when_settings_cannot_be_loaded(cog_env, cmd_channels, monkeypatch):
+    from cogs import DailyPreparation as cog_module
+    from Utils.database import DatabaseError
+
+    def broken_settings(guild_id, teacher_id):
+        raise DatabaseError('database is locked')
+
+    monkeypatch.setattr(cog_module, 'TeacherSettings', broken_settings)
+
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+
+    sent = cmd_channels[CALENDAR_TEACHER].sent
+    assert len(sent) == 1 and 'Tagesvorbereitung abgeschlossen' in sent[0]
+    assert not any('fehlgeschlagen' in message for message, details in cog_env.logged)
+
+
 def test_expired_login_notice_sent_even_when_summary_disabled(cog_env, cmd_channels, monkeypatch):
     from cogs import DailyPreparation as cog_module
 
