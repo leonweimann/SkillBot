@@ -173,6 +173,20 @@ Der Refresh-Token wird durch die nächtliche Nutzung erneuert. Nach ca. 90 Tagen
 Widerruf der Anmeldung postet der Bot einen Hinweis im `cmd`-Channel. Dann einfach erneut
 `/calendar connect` ausführen. Der Token-Cache liegt in der SQLite-Datenbank (`data/`), daher privat halten.
 
+## Verwaiste Schüler-Einträge (`/dev orphans`)
+
+Verlässt ein Mitglied den Server, löscht der Bot seinen Schüler-Channel und alle seine Einträge in der
+Datenbank. Ein Lehrer, der noch Schüler hat, bleibt erhalten (Warnung im `logs`-Channel). Früher schlug das
+Löschen fehl, deshalb können noch Einträge übrig sein, deren Channel es nicht mehr gibt (in der nächtlichen
+Zusammenfassung als „Channel nicht gefunden“).
+
+- `/dev orphans` (Rolle `Dev`, Antwort nur für dich sichtbar) prüft anhand der aktuellen Channels und Mitglieder
+  von Discord und zeigt, was gelöscht würde. Es wird nichts verändert.
+- `/dev orphans apply:True` löscht die Einträge der Schüler, die den Server verlassen haben, und schreibt einen
+  Eintrag in den `logs`-Channel.
+- Schüler, die noch auf dem Server sind, werden nie gelöscht, nur aufgelistet. Der Lehrer trägt sie mit
+  `/students unassign` aus (geht auch ohne Channel) und ordnet sie mit `/students assign` neu zu.
+
 ## Hinweise
 
 - Der wöchentliche DatabaseIntegrity-Lauf ist deaktiviert (die manuellen Befehle bleiben).
