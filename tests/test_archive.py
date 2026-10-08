@@ -14,6 +14,7 @@ import pytest
 from Utils import archive as archive_mod
 from Utils import channel_moves
 from Utils.archive import ArchiveAllocator, is_category_full_error
+from Utils.errors import CodeError
 from tests.archive_fakes import MAX, FakeArchiveTable, FakeGuild, category_full_error, http_error, server_error
 
 
@@ -66,25 +67,33 @@ def test_detects_category_full_error_from_text_only():
     assert is_category_full_error(error)
 
 
-def test_detects_category_full_error_from_parent_id_with_reworded_message():
+def test_detects_category_full_error_from_nested_code_with_reworded_message():
     error = http_error(400, 50035, {'parent_id': {'_errors': [{
-        'code': 'SOMETHING_NEW', 'message': 'Category has no room left'
+        'code': 'CHANNEL_PARENT_MAX_CHANNELS', 'message': 'Category has no room left'
     }]}})
-    assert 'maximum number of channels' not in error.text.lower()
+    error.text = 'Invalid Form Body'  # Nothing about the limit in the flattened text
     assert is_category_full_error(error)
 
 
-def test_detects_category_full_error_from_nested_errors_only():
-    error = http_error(400, 50035, {'parent_id': {'_errors': [{'code': 'X', 'message': 'reworded'}]}})
-    error.text = 'Invalid Form Body'  # Nothing about parent_id in the flattened text
+def test_detects_category_full_error_from_nested_message_only():
+    error = http_error(400, 50035, {'parent_id': {'_errors': [{
+        'code': 'SOMETHING_NEW', 'message': 'Maximum number of channels in category reached (50)'
+    }]}})
+    error.text = 'Invalid Form Body'
     assert is_category_full_error(error)
 
 
-def test_detects_category_full_error_from_parent_id_in_text_only():
-    error = http_error(400, 50035, message='Invalid Form Body')
-    error.text = 'Invalid Form Body\nIn parent_id: reworded'
-    error._errors = None
-    assert is_category_full_error(error)
+@pytest.mark.parametrize('nested, text', [
+    ({'parent_id': {'_errors': [{'code': 'CHANNEL_PARENT_INVALID', 'message': 'Category does not exist'}]}},
+     'Invalid Form Body\nIn parent_id: Category does not exist'),
+    ({'parent_id': {'_errors': [{'code': 'X', 'message': 'reworded'}]}}, 'Invalid Form Body'),
+    (None, 'Invalid Form Body\nIn parent_id: reworded'),
+])
+def test_other_parent_id_errors_are_not_category_full(nested, text):
+    error = http_error(400, 50035, nested, message='Invalid Form Body')
+    error.text = text
+    error._errors = nested
+    assert not is_category_full_error(error)
 
 
 def test_detects_category_full_error_from_message_text_without_parent_id():
@@ -307,7 +316,9 @@ def test_retries_are_bounded_when_every_archive_rejects(world):
     with pytest.raises(discord.HTTPException):
         asyncio.run(archive_all(world.guild, [channel]))
 
-    assert len(world.guild.edit_calls) == ArchiveAllocator.MAX_FULL_RETRIES + 1
+    # The existing archive plus at most MAX_NEW_ARCHIVES new ones, never more than MAX_FULL_RETRIES + 1 moves
+    assert len(world.guild.edit_calls) == 1 + ArchiveAllocator.MAX_NEW_ARCHIVES
+    assert len(world.guild.edit_calls) <= ArchiveAllocator.MAX_FULL_RETRIES + 1
 
 
 def test_channel_already_in_archive_is_not_moved(world):
@@ -379,3 +390,31 @@ def test_reused_full_category_is_skipped_by_allocator(world):
     assert world.guild.server_count(777) == MAX
 
 # endregion
+
+
+def test_new_archives_are_capped_per_allocator(world, monkeypatch):
+    """Even if Discord keeps rejecting every move as full, one run creates at most MAX_NEW_ARCHIVES archives."""
+    created = []
+    real_create = archive_mod.ArchiveCategory._create_new_archive_category
+
+    async def counting_create(guild):
+        category = await real_create(guild)
+        created.append(category.id)
+        return category
+
+    monkeypatch.setattr(archive_mod.ArchiveCategory, '_create_new_archive_category', staticmethod(counting_create))
+    world.guild.fill(ARCHIVE_A, MAX, start=2000)
+    channels = students(world, 3)
+
+    async def always_full(**kwargs):
+        raise category_full_error()
+
+    async def run():
+        allocator = await ArchiveAllocator.create(world.guild)
+        for channel in channels:
+            channel.edit = always_full
+            with pytest.raises((discord.HTTPException, CodeError)):
+                await allocator.archive(channel)
+
+    asyncio.run(run())
+    assert len(created) == ArchiveAllocator.MAX_NEW_ARCHIVES
