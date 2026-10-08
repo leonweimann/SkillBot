@@ -280,4 +280,19 @@ def test_dev_orphans_command_defers_ephemeral(logs):
     assert 'Würde löschen (2)' in content
     assert connected(GONE)
 
+
+def no_dev_interaction(roles=()):
+    user = SimpleNamespace(roles=[SimpleNamespace(name=name) for name in roles], get_role=lambda item: None)
+    return SimpleNamespace(user=user, guild=FakeGuild())
+
+
+def test_dev_orphans_requires_dev_role():
+    from cmds.DevGroup import DevGroup
+
+    command = DevGroup().get_command('orphans')
+    assert command.checks  # The role guard must not get lost in a refactor
+    with pytest.raises(discord.app_commands.MissingRole):
+        asyncio.run(command._check_can_run(no_dev_interaction(roles=('Lehrer',))))
+    assert asyncio.run(command._check_can_run(no_dev_interaction(roles=('Dev',)))) is True
+
 # endregion
