@@ -21,8 +21,8 @@ import Utils.environment  # noqa: F401  (must be imported before Utils.lwlogging
 from Coordination.schedule import CalendarEvent, DayPlan, compute_moves, plan_day
 from Coordination.sorting import channel_sorting_coordinator
 from Utils import msgraph
-from Utils.archive import ArchiveCategory
-from Utils.channel_moves import get_guild_lock
+from Utils.archive import ArchiveAllocator
+from Utils.channel_moves import get_guild_lock, retry_transient
 from Utils.database import Archive, Student, Subuser, Teacher, TeacherCalendar, TeacherStudentConnection
 from Utils.errors import CodeError, UsageError
 from Utils.lwlogging import log
@@ -33,6 +33,8 @@ BERLIN = ZoneInfo('Europe/Berlin')
 _SUMMARY_LIMIT = 1900          # Leave some headroom below Discord's 2000 character limit
 _LIST_CHAR_LIMIT = 250         # Max characters per listed group in the summary
 _ITEM_CHAR_LIMIT = 80          # Max characters per single listed item
+_REASON_CHAR_LIMIT = 500       # Max characters of the failure reasons in the nightly logs entry
+_REASON_ITEM_CHAR_LIMIT = 160  # Max characters per single failure reason
 
 
 # region Locks & Helpers
@@ -109,6 +111,7 @@ class PrepResult:
     stashed: list[str] = field(default_factory=list)   # channel names moved into an archive
     missing: list[str] = field(default_factory=list)   # students whose channel was not found
     failed: list[str] = field(default_factory=list)    # channel names whose move failed
+    failure_reasons: dict[str, str] = field(default_factory=dict)  # channel name -> short failure reason
 
 
 def _load_students(guild: discord.Guild, teacher_id: int) -> tuple[list[TeacherStudentConnection], dict[int, Optional[str]]]:
@@ -118,6 +121,27 @@ def _load_students(guild: discord.Guild, teacher_id: int) -> tuple[list[TeacherS
         con.student_id: Student(guild.id, con.student_id).real_name for con in connections
     }
     return connections, student_names
+
+
+def _failure_reason(error: BaseException) -> str:
+    """Returns a short single-line description of why a move failed (for the logs channel)."""
+    if isinstance(error, discord.HTTPException):
+        lines = [line.strip() for line in (error.text or '').splitlines() if line.strip()]
+        prefix = f'HTTP {error.status} ({error.code})'
+        return f'{prefix}: {lines[-1]}' if lines else prefix
+    text = ' '.join(str(error).split())
+    return f'{type(error).__name__}: {text}' if text else type(error).__name__
+
+
+async def _record_failure(guild: discord.Guild, result: PrepResult, channel: discord.TextChannel,
+                          error: BaseException, *, log_problems: bool, log_message: str, print_message: str):
+    """Collects a failed move in ``result`` and logs it individually if ``log_problems`` is set."""
+    result.failed.append(channel.name)
+    result.failure_reasons[channel.name] = _failure_reason(error)
+    if log_problems:
+        await _safe_log(guild, log_message, {'error': str(error)})
+    else:
+        print(f'[daily_prep] {print_message}: {error}')
 
 
 async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category: discord.CategoryChannel,
@@ -130,6 +154,10 @@ async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category
     Channels of target students outside the teacher category are popped, channels of all other students
     inside the teacher category are archived; everything else (``cmd``, foreign channels, already archived
     channels) stays untouched. Runs under the guild lock and fills ``result`` in place.
+
+    The archive slots are counted from Discord's data (`ArchiveAllocator`), fetched after the pops so
+    the freed slots are already included; the guild cache lags behind the moves and is never used for
+    capacity decisions. Every move is retried once on a transient network or server error.
 
     Args:
         guild (discord.Guild): The guild of the teacher.
@@ -146,11 +174,13 @@ async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category
             If False, problems are only collected in ``result`` (the caller reports them).
 
     Students currently waiting in the lounge always count as targets. They are read under the lock, so
-    a lounge pop that ran just before can never be undone by this run.
+    a lounge pop that ran just before can never be undone by this run, and checked again right before
+    every archive move, so a student who joins the lounge during the run keeps the channel as well.
     """
     async with get_guild_lock(guild.id):
         target_student_ids = target_student_ids | students_in_lounge(guild)
         channels: dict[int, discord.TextChannel] = {}
+        channel_students: dict[int, int] = {}
         moves_input: list[tuple[int, int, Optional[int]]] = []
         for con in connections:
             channel = discord.utils.get(guild.text_channels, id=con.channel_id)
@@ -164,6 +194,7 @@ async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category
                     )
                 continue
             channels[channel.id] = channel
+            channel_students[channel.id] = con.student_id
             moves_input.append((con.student_id, channel.id, channel.category_id))
 
         pop_ids, stash_ids = compute_moves(moves_input, teacher_category.id, target_student_ids)
@@ -176,30 +207,42 @@ async def _move_channels(guild: discord.Guild, teacher_id: int, teacher_category
         for cid in pop_ids:
             channel = channels[cid]
             try:
-                await channel.edit(category=teacher_category, reason=reason)
+                await retry_transient(lambda: channel.edit(category=teacher_category, reason=reason))
                 result.popped.append(channel.name)
             except Exception as e:
-                result.failed.append(channel.name)
-                if log_problems:
-                    await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht in die Lehrer-Kategorie verschieben", {'error': str(e)})
-                else:
-                    print(f'[daily_prep] Failed to move channel {channel.id} into the teacher category: {e}')
+                await _record_failure(
+                    guild, result, channel, e, log_problems=log_problems,
+                    log_message=f"[ERROR] Konnte {channel.mention} nicht in die Lehrer-Kategorie verschieben",
+                    print_message=f'Failed to move channel {channel.id} into the teacher category'
+                )
+
+        allocator: Optional[ArchiveAllocator] = None
+        allocator_error: Optional[Exception] = None
+        if stash_ids:
+            try:
+                # Built after the pops: the fetched counts already include the slots they freed
+                allocator = await ArchiveAllocator.create(guild)
+            except Exception as e:
+                allocator_error = e
 
         touched_archives: dict[int, discord.CategoryChannel] = {}
         for cid in stash_ids:
             channel = channels[cid]
+            # The student may have joined the lounge since the start of the run (cache only, no API call)
+            if channel_students[cid] in students_in_lounge(guild):
+                continue
             try:
-                # Re-make per channel so a full archive rolls over to a new one
-                archive = await ArchiveCategory.make(guild)
-                archive_category = await archive.add_channel(channel)
+                if allocator is None:
+                    raise allocator_error or CodeError('Archiv-Verteilung nicht verfügbar')
+                archive_category = await allocator.archive(channel, reason=reason)
                 touched_archives[archive_category.id] = archive_category
                 result.stashed.append(channel.name)
             except Exception as e:
-                result.failed.append(channel.name)
-                if log_problems:
-                    await _safe_log(guild, f"[ERROR] Konnte {channel.mention} nicht archivieren", {'error': str(e)})
-                else:
-                    print(f'[daily_prep] Failed to archive channel {channel.id}: {e}')
+                await _record_failure(
+                    guild, result, channel, e, log_problems=log_problems,
+                    log_message=f"[ERROR] Konnte {channel.mention} nicht archivieren",
+                    print_message=f'Failed to archive channel {channel.id}'
+                )
 
         # Sorting fetches fresh channel data itself (the cache lags behind the HTTP calls)
         if result.popped or result.stashed:
@@ -394,12 +437,12 @@ def _join_limited(items: list[str], limit: int = _LIST_CHAR_LIMIT) -> str:
     return ', '.join(parts)
 
 
-def _join_plain(items: list[str], limit: int = _LIST_CHAR_LIMIT) -> str:
+def _join_plain(items: list[str], limit: int = _LIST_CHAR_LIMIT, item_limit: int = _ITEM_CHAR_LIMIT) -> str:
     """Joins items with commas (no markdown, for code blocks), truncated with a "+n weitere" suffix."""
     parts: list[str] = []
     length = 0
     for index, item in enumerate(items):
-        piece = ' '.join(str(item).split()).replace('`', "'")[:_ITEM_CHAR_LIMIT]
+        piece = ' '.join(str(item).split()).replace('`', "'")[:item_limit]
         extra = len(piece) + (2 if parts else 0)
         if length + extra > limit:
             parts.append(f'… (+{len(items) - index} weitere)')
@@ -418,13 +461,17 @@ def format_stash_details(teacher_id: int, result: PrepResult) -> dict[str, str]:
         result (PrepResult): The result of `stash_all`.
 
     Returns:
-        dict[str, str]: Details for the logs channel; empty groups are left out.
+        dict[str, str]: Details for the logs channel; empty groups are left out. Failed channels also get
+        a short reason each (``Fehler``), so the cause is visible in Discord.
     """
     details = {'Lehrer': f'<@{teacher_id}>'}
     if result.stashed:
         details['Archiviert'] = f'{len(result.stashed)}: {_join_plain(result.stashed)}'
     if result.failed:
         details['Fehlgeschlagen'] = f'{len(result.failed)}: {_join_plain(result.failed)}'
+        reasons = [f'{name}: {result.failure_reasons[name]}' for name in result.failed if name in result.failure_reasons]
+        if reasons:
+            details['Fehler'] = _join_plain(reasons, limit=_REASON_CHAR_LIMIT, item_limit=_REASON_ITEM_CHAR_LIMIT)
     if result.missing:
         details['Nicht gefunden'] = f'{len(result.missing)}: {_join_plain(result.missing)}'
     return details
