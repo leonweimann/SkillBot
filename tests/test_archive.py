@@ -280,6 +280,26 @@ def test_non_capacity_error_is_not_retried(world):
     assert world.guild.edit_calls == [(channel.id, ARCHIVE_A)]
 
 
+def test_failed_move_does_not_use_up_the_archive_slot(world):
+    world.guild.fill(ARCHIVE_A, 49, start=2000)
+    add_archive_b(world, filled=0)
+    first, second = students(world, 2)
+    world.guild.fail_edits = [http_error(403, 50013, message='Missing Permissions')]
+
+    async def scenario():
+        allocator = await ArchiveAllocator.create(world.guild)
+        with pytest.raises(discord.HTTPException):
+            await allocator.archive(first)
+        return await allocator.archive(second), allocator
+
+    target, allocator = asyncio.run(scenario())
+
+    assert target.id == ARCHIVE_A  # The failed move left A's last slot free
+    assert allocator.count(ARCHIVE_A) == MAX
+    assert world.guild.server_parent[first.id] == TEACHER_CATEGORY_ID
+    assert world.guild.created == []
+
+
 def test_retries_are_bounded_when_every_archive_rejects(world):
     channel = students(world, 1)[0]
     world.guild.fail_edits = [category_full_error() for _ in range(20)]
@@ -295,6 +315,23 @@ def test_channel_already_in_archive_is_not_moved(world):
 
     assert asyncio.run(archive_all(world.guild, [archived])) == [ARCHIVE_A]
     assert world.guild.edit_calls == []
+
+
+def test_channel_archived_on_discord_but_not_in_cache_is_not_moved_again(world):
+    world.guild.fill(ARCHIVE_A, 10, start=2000)
+    add_archive_b(world, filled=0)
+    channel = world.guild.add_channel(7, 'gerade-archiviert', ARCHIVE_B)
+    channel.category_id = TEACHER_CATEGORY_ID  # The gateway event of the move has not arrived yet
+
+    async def scenario():
+        allocator = await ArchiveAllocator.create(world.guild)
+        return await allocator.archive(channel), allocator
+
+    target, allocator = asyncio.run(scenario())
+
+    assert target.id == ARCHIVE_B
+    assert world.guild.edit_calls == []
+    assert allocator.count(ARCHIVE_A) == 10 and allocator.count(ARCHIVE_B) == 1
 
 
 def test_deleted_archive_is_ignored(world):
