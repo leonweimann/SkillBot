@@ -9,7 +9,7 @@ from discord import app_commands
 import Utils.environment as env
 import Utils.msgraph as msgraph
 import Coordination.daily_prep as prep
-from Utils.database import Teacher, TeacherCalendar
+from Utils.database import Teacher, TeacherCalendar, TeacherSettings
 from Utils.errors import UsageError
 
 CALENDAR_CACHE_TTL_SECONDS = 60
@@ -223,6 +223,7 @@ class CalendarGroup(app_commands.Group):
     @app_commands.checks.has_role('Lehrer')
     async def status(self, interaction: discord.Interaction):
         db_cal = TeacherCalendar(interaction.guild.id, interaction.user.id)
+        settings = TeacherSettings(interaction.guild.id, interaction.user.id)
         lines = [
             f"Microsoft-Anbindung konfiguriert: {'ja' if msgraph.is_configured() else 'nein'}",
             f"Konto verknüpft: {'ja' if db_cal.is_linked else 'nein'}",
@@ -230,6 +231,7 @@ class CalendarGroup(app_commands.Group):
             f"Zuletzt vorbereitet: {db_cal.last_prepared_date or 'noch nie'}",
             f'Tägliche Vorbereitung: {NIGHTLY_PREP_TIME} Uhr (Europe/Berlin)'
             + ('' if msgraph.is_configured() and db_cal.is_ready else ': ohne Kalender werden alle Schüler-Channels archiviert'),
+            f"Tägliche Zusammenfassung im cmd: {'an' if settings.daily_summary else 'aus'}",
         ]
         await env.send_safe_response(interaction, '**Kalender-Status**\n' + '\n'.join(f'- {l}' for l in lines), ephemeral=True)
 
@@ -240,6 +242,35 @@ class CalendarGroup(app_commands.Group):
         )
 
     # endregion Status
+
+    # region Summary
+
+    @app_commands.command(
+        name='summary',
+        description='Schaltet die nächtliche Zusammenfassung im cmd-Channel ein oder aus.'
+    )
+    @app_commands.describe(enabled='True: Zusammenfassung posten, False: keine Zusammenfassung mehr posten')
+    @app_commands.checks.has_role('Lehrer')
+    async def summary(self, interaction: discord.Interaction, enabled: bool):
+        if Teacher(interaction.guild.id, interaction.user.id).teaching_category is None:
+            raise UsageError('Du bist nicht als Lehrer registriert.')
+
+        TeacherSettings(interaction.guild.id, interaction.user.id).set_daily_summary(enabled)
+        if enabled:
+            text = 'Die nächtliche Zusammenfassung wird wieder in deinen `cmd`-Channel gepostet.'
+        else:
+            text = ('Die nächtliche Zusammenfassung wird nicht mehr in deinen `cmd`-Channel gepostet. '
+                    'Die Tagesvorbereitung läuft weiter, `/calendar preview` und `/calendar prepare-now` antworten '
+                    'wie gewohnt, und eine abgelaufene Kalender-Verbindung wird weiterhin gemeldet.')
+        await env.send_safe_response(interaction, env.success_response(text), ephemeral=True)
+
+    @summary.error
+    async def summary_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name='calendar summary', reqired_role='Lehrer'
+        )
+
+    # endregion Summary
 
     # region Disconnect
 

@@ -285,6 +285,7 @@ def cog_env(monkeypatch):
     calls = []
     logged = []
     stash_results = {}
+    summary_settings = {}  # teacher_id -> daily_summary, default True
 
     async def fake_prepare(guild, teacher_id, day, dry_run=False):
         calls.append(('prepare', teacher_id))
@@ -303,6 +304,8 @@ def cog_env(monkeypatch):
     monkeypatch.setattr(cog_module, 'DatabaseManager',
                         SimpleNamespace(get_all_teacher_ids=lambda g: list(calendars)))
     monkeypatch.setattr(cog_module, 'TeacherCalendar', lambda g, t: calendars[t])
+    monkeypatch.setattr(cog_module, 'TeacherSettings',
+                        lambda g, t: SimpleNamespace(daily_summary=summary_settings.get(t, True)))
     monkeypatch.setattr(cog_module, 'prepare_teacher', fake_prepare)
     monkeypatch.setattr(cog_module, 'stash_all', fake_stash_all)
     monkeypatch.setattr(cog_module, 'get_cmd_channel', lambda g, t: None)
@@ -311,7 +314,62 @@ def cog_env(monkeypatch):
 
     cog = cog_module.DailyPreparation(SimpleNamespace(guilds=[guild]))
     return SimpleNamespace(cog=cog, calls=calls, logged=logged, calendars=calendars, members=members,
-                           stash_results=stash_results, guild=guild)
+                           stash_results=stash_results, guild=guild, summary_settings=summary_settings)
+
+
+class FakeCmdChannel:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, content, **kwargs):
+        self.sent.append(content)
+
+
+@pytest.fixture
+def cmd_channels(cog_env, monkeypatch):
+    from cogs import DailyPreparation as cog_module
+
+    channels = {tid: FakeCmdChannel() for tid in cog_env.calendars}
+    monkeypatch.setattr(cog_module, 'get_cmd_channel', lambda g, t: channels[t])
+    return channels
+
+
+def test_nightly_summary_sent_by_default(cog_env, cmd_channels):
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+    sent = cmd_channels[CALENDAR_TEACHER].sent
+    assert len(sent) == 1 and 'Tagesvorbereitung abgeschlossen' in sent[0]
+    assert cmd_channels[PLAIN_TEACHER].sent == []  # teachers without calendar never get a summary
+
+
+def test_nightly_summary_sent_when_enabled(cog_env, cmd_channels):
+    cog_env.summary_settings[CALENDAR_TEACHER] = True
+    asyncio.run(cog_env.cog._run_all(catch_up=True))
+    assert len(cmd_channels[CALENDAR_TEACHER].sent) == 1
+
+
+@pytest.mark.parametrize('catch_up', [False, True])
+def test_nightly_summary_not_sent_when_disabled(cog_env, cmd_channels, catch_up):
+    cog_env.summary_settings[CALENDAR_TEACHER] = False
+    asyncio.run(cog_env.cog._run_all(catch_up=catch_up))
+    assert ('prepare', CALENDAR_TEACHER) in cog_env.calls  # the preparation itself still runs
+    assert cmd_channels[CALENDAR_TEACHER].sent == []
+    assert not any('cmd' in message for message, details in cog_env.logged)
+
+
+def test_expired_login_notice_sent_even_when_summary_disabled(cog_env, cmd_channels, monkeypatch):
+    from cogs import DailyPreparation as cog_module
+
+    async def expired_prepare(guild, teacher_id, day, dry_run=False):
+        raise msgraph.GraphAuthError('expired')
+
+    monkeypatch.setattr(cog_module, 'prepare_teacher', expired_prepare)
+    cog_env.summary_settings[CALENDAR_TEACHER] = False
+
+    asyncio.run(cog_env.cog._run_all(catch_up=False))
+
+    sent = cmd_channels[CALENDAR_TEACHER].sent
+    assert len(sent) == 1 and 'Kalender-Verbindung ist abgelaufen' in sent[0]
+    assert any('abgelaufen' in message for message, details in cog_env.logged)
 
 
 def test_nightly_dispatches_calendar_teachers_to_prepare_and_others_to_stash_all(cog_env):

@@ -5,7 +5,7 @@ from datetime import date, datetime, time
 
 from Coordination.daily_prep import BERLIN, format_stash_details, format_summary, get_cmd_channel, prepare_teacher, stash_all
 from Utils import msgraph
-from Utils.database import DatabaseManager, TeacherCalendar
+from Utils.database import DatabaseManager, TeacherCalendar, TeacherSettings
 from Utils.lwlogging import log
 
 
@@ -18,7 +18,8 @@ class DailyPreparation(commands.Cog):
 
     Teachers with a ready calendar: students with an appointment today get their channel moved into the
     teacher's category, all other students of that teacher get archived. A summary is posted into the
-    teacher's ``cmd`` channel.
+    teacher's ``cmd`` channel, unless the teacher switched it off with ``/calendar summary``. The notice
+    about an expired calendar login is posted regardless of that setting.
 
     Teachers without a ready calendar (or if Microsoft Graph is not configured): all student channels in
     the teacher's category get archived. Nothing is posted into the ``cmd`` channel, only the logs channel
@@ -174,6 +175,9 @@ class DailyPreparation(commands.Cog):
             )
             return
 
+        if not self._summary_enabled(guild, teacher_id):
+            return
+
         if cmd_channel:
             try:
                 await cmd_channel.send(format_summary(result, dry_run=False), allowed_mentions=discord.AllowedMentions.none())
@@ -186,6 +190,14 @@ class DailyPreparation(commands.Cog):
                 'Tagesvorbereitung durchgeführt, aber kein `cmd`-Channel für den Lehrer gefunden',
                 {'Lehrer': f'<@{teacher_id}>'}
             )
+
+    def _summary_enabled(self, guild: discord.Guild, teacher_id: int) -> bool:
+        """Whether the teacher wants the nightly summary in cmd (``/calendar summary``); defaults to True."""
+        try:
+            return TeacherSettings(guild.id, teacher_id).daily_summary
+        except Exception as e:  # A broken setting must not hide the summary
+            print(f'[{self.__class__.__name__}] Failed to load the settings of teacher {teacher_id} in guild {guild.name}: {e}')
+            return True
 
     def _first_report(self, guild_id: int, teacher_id: int, day: date) -> bool:
         """Returns True only the first time a failure of this teacher is reported on that day."""

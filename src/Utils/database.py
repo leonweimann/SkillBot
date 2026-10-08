@@ -139,6 +139,13 @@ class DatabaseManager:
                         FOREIGN KEY (teacher_id) REFERENCES teachers (user_id)
                     )
                 ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS teacher_settings (
+                        teacher_id INTEGER PRIMARY KEY,
+                        daily_summary INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY (teacher_id) REFERENCES teachers (user_id)
+                    )
+                ''')
                 conn.commit()
                 logger.info(f"Database tables created successfully for guild {guild_id}")
         except sqlite3.Error as e:
@@ -472,6 +479,7 @@ class Teacher(User):
             with DatabaseManager._connect(self.guild_id) as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM teacher_calendar WHERE teacher_id = ?', (self.id,))
+                cursor.execute('DELETE FROM teacher_settings WHERE teacher_id = ?', (self.id,))
                 cursor.execute('DELETE FROM teachers WHERE user_id = ?', (self.id,))
                 if cursor.rowcount == 0:
                     raise TeacherNotFoundError(f"Teacher {self.id} not found in guild {self.guild_id}")
@@ -1043,6 +1051,59 @@ class TeacherCalendar:
         except sqlite3.Error as e:
             logger.error(f"Failed to get all teacher calendars for guild {guild_id}: {e}")
             raise DatabaseError(f"Failed to retrieve teacher calendars: {e}") from e
+
+# endregion
+
+
+# region TeacherSettings
+
+@dataclass
+class TeacherSettings:
+    """Personal settings of a teacher.
+
+    Kept apart from `teacher_calendar` so they survive `/calendar disconnect`.
+    Without a row every setting has its default value. The teacher must already
+    exist in the `teachers` table before a setting is stored (foreign key
+    constraints are enabled).
+    """
+    guild_id: int
+    teacher_id: int
+    daily_summary: bool = field(default=True)  # Post the nightly summary into the teacher's cmd channel
+
+    def __post_init__(self):
+        """Load teacher settings from database"""
+        self.load()
+
+    def load(self):
+        """Load teacher settings from database (defaults if no row exists)"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT daily_summary FROM teacher_settings WHERE teacher_id = ?', (self.teacher_id,))
+                row = cursor.fetchone()
+                if row:
+                    self.daily_summary = bool(row[0])
+        except sqlite3.Error as e:
+            logger.error(f"Failed to load teacher settings {self.teacher_id} from guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to load teacher settings: {e}") from e
+
+    def set_daily_summary(self, enabled: bool):
+        """Store whether the nightly summary is posted (creates the row if needed, keeps other columns)"""
+        try:
+            with DatabaseManager._connect(self.guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO teacher_settings (teacher_id, daily_summary)
+                    VALUES (?, ?)
+                    ON CONFLICT (teacher_id) DO UPDATE SET
+                    daily_summary = excluded.daily_summary
+                ''', (self.teacher_id, int(enabled)))
+                conn.commit()
+            self.daily_summary = enabled
+            logger.debug(f"Set daily summary to {enabled} for teacher {self.teacher_id} in guild {self.guild_id}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to set daily summary for teacher {self.teacher_id} in guild {self.guild_id}: {e}")
+            raise DatabaseError(f"Failed to save teacher settings: {e}") from e
 
 # endregion
 
