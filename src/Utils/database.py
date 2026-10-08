@@ -760,6 +760,22 @@ class TeacherStudentConnection:
             raise DatabaseError(f"Failed to find teacher-student connection: {e}") from e
 
     @staticmethod
+    def find_all_by_student(guild_id: int, student_id: int) -> List['TeacherStudentConnection']:
+        """Find all connections of a student"""
+        try:
+            with DatabaseManager._connect(guild_id) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT teacher_id, student_id, channel_id FROM teacher_student WHERE student_id = ?', (student_id,))
+                rows = cursor.fetchall()
+            return [
+                TeacherStudentConnection(guild_id=guild_id, teacher_id=row[0], student_id=row[1], channel_id=row[2])
+                for row in rows
+            ]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to find connections for student {student_id} in guild {guild_id}: {e}")
+            raise DatabaseError(f"Failed to find teacher-student connections: {e}") from e
+
+    @staticmethod
     def find_by_teacher(guild_id: int, teacher_id: int) -> Optional['TeacherStudentConnection']:
         """Find connection by teacher ID"""
         try:
