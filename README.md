@@ -78,7 +78,9 @@ werden. Lehrer können dafür optional ihren Microsoft-365-Kalender (Outlook) ve
   - Schüler mit einem Termin heute: Channel wird in die Lehrer-Kategorie verschoben (pop).
   - Alle anderen Schüler dieses Lehrers: Channel wird archiviert (stash).
   - Eine Zusammenfassung (verschoben, übersprungen, nicht zugeordnet, mehrdeutig) landet im `cmd`-Channel
-    des Lehrers.
+    des Lehrers. Mit `/calendar summary enabled:False` lässt sie sich abschalten (`enabled:True` schaltet sie
+    wieder ein). Die Vorbereitung selbst läuft weiter, und der Hinweis auf eine abgelaufene
+    Kalender-Verbindung kommt trotzdem.
   - Wurde der Bot um 04:00 nicht ausgeführt, holt er die Kalender-Vorbereitung beim Start nach. Das
     Archivieren ohne Kalender wird bewusst nicht nachgeholt: Ein Neustart tagsüber würde sonst Channels
     laufender Stunden wegräumen.
@@ -162,8 +164,10 @@ Alle `/calendar`-Befehle erfordern die Rolle `Lehrer`.
    Hier prüfen, ob die Namen zugeordnet werden.
 4. Optional `/calendar prepare-now`: Führt die Vorbereitung sofort aus.
 
-Weitere Befehle: `/calendar status` (Verknüpfung, Kalender, letzter Lauf) und `/calendar disconnect`
-(Verknüpfung löschen).
+Weitere Befehle: `/calendar status` (Verknüpfung, Kalender, letzter Lauf, Zusammenfassung an/aus),
+`/calendar disconnect` (Verknüpfung löschen) und `/calendar summary` (nächtliche Zusammenfassung im
+`cmd`-Channel ein- oder ausschalten; `/calendar preview` und `/calendar prepare-now` antworten weiterhin
+mit der Zusammenfassung). Die Einstellung bleibt auch nach `/calendar disconnect` erhalten.
 
 Der Refresh-Token wird durch die nächtliche Nutzung erneuert. Nach ca. 90 Tagen ohne Nutzung oder nach einem
 Widerruf der Anmeldung postet der Bot einen Hinweis im `cmd`-Channel. Dann einfach erneut
