@@ -229,3 +229,34 @@ def test_failed_log_still_reports_deletion(logs, monkeypatch):
 
 # endregion
 
+
+# region /dev orphans command
+
+class FakeInteraction:
+    def __init__(self, guild):
+        self.guild = guild
+        self.user = ACTOR
+        self.calls = []
+        self.response = SimpleNamespace(defer=self._defer)
+        self.followup = SimpleNamespace(send=self._send)
+
+    async def _defer(self, **kwargs):
+        self.calls.append(('defer', kwargs))
+
+    async def _send(self, content, **kwargs):
+        self.calls.append(('send', content, kwargs))
+
+
+def test_dev_orphans_command_defers_ephemeral(logs):
+    from cmds.DevGroup import DevGroup
+
+    seed()
+    interaction = FakeInteraction(FakeGuild())
+    asyncio.run(DevGroup.orphans.callback(DevGroup(), interaction))  # apply defaults to False
+
+    (_, defer_kwargs), (_, content, send_kwargs) = interaction.calls
+    assert defer_kwargs['ephemeral'] is True and send_kwargs['ephemeral'] is True
+    assert 'Würde löschen (2)' in content
+    assert connected(GONE)
+
+# endregion
