@@ -65,10 +65,41 @@ def test_detects_category_full_error_from_text_only():
     assert is_category_full_error(error)
 
 
+def test_detects_category_full_error_from_parent_id_with_reworded_message():
+    error = http_error(400, 50035, {'parent_id': {'_errors': [{
+        'code': 'SOMETHING_NEW', 'message': 'Category has no room left'
+    }]}})
+    assert 'maximum number of channels' not in error.text.lower()
+    assert is_category_full_error(error)
+
+
+def test_detects_category_full_error_from_nested_errors_only():
+    error = http_error(400, 50035, {'parent_id': {'_errors': [{'code': 'X', 'message': 'reworded'}]}})
+    error.text = 'Invalid Form Body'  # Nothing about parent_id in the flattened text
+    assert is_category_full_error(error)
+
+
+def test_detects_category_full_error_from_parent_id_in_text_only():
+    error = http_error(400, 50035, message='Invalid Form Body')
+    error.text = 'Invalid Form Body\nIn parent_id: reworded'
+    error._errors = None
+    assert is_category_full_error(error)
+
+
+def test_detects_category_full_error_from_message_text_without_parent_id():
+    error = http_error(400, 0, message='Maximum number of channels in category reached (50)')
+    error._errors = None
+    assert is_category_full_error(error)
+
+
 @pytest.mark.parametrize('error', [
     http_error(403, 50013, message='Missing Permissions'),
     http_error(400, 50035, {'name': {'_errors': [{'code': 'BASE_TYPE_BAD_LENGTH', 'message': 'Must be 1-100'}]}}),
+    http_error(400, 50013, {'parent_id': {'_errors': [{'code': 'X', 'message': 'reworded'}]}}),
     http_error(404, 10003, message='Unknown Channel'),
+    http_error(403, 50035, {'parent_id': {'_errors': [{
+        'code': 'CHANNEL_PARENT_MAX_CHANNELS', 'message': 'Maximum number of channels in category reached (50)'
+    }]}}),
     RuntimeError('parent_id'),
 ])
 def test_other_errors_are_not_category_full(error):
