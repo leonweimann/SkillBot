@@ -7,6 +7,7 @@ has a guild cache that never catches up during a burst of moves.
 import asyncio
 from types import SimpleNamespace
 
+import aiohttp
 import discord
 import pytest
 
@@ -104,6 +105,33 @@ def test_detects_category_full_error_from_message_text_without_parent_id():
 ])
 def test_other_errors_are_not_category_full(error):
     assert not is_category_full_error(error)
+
+# endregion
+
+
+# region is_transient_error
+
+@pytest.mark.parametrize('error', [
+    server_error(),
+    aiohttp.ServerDisconnectedError(),
+    aiohttp.ClientConnectionError('connection lost'),
+    asyncio.TimeoutError(),
+    ConnectionResetError(104, 'Connection reset by peer'),
+    OSError(104, 'Connection reset by peer'),
+])
+def test_transient_errors(error):
+    assert channel_moves.is_transient_error(error)
+
+
+@pytest.mark.parametrize('error', [
+    category_full_error(),
+    http_error(400, 50035, message='Invalid Form Body'),
+    http_error(403, 50013, message='Missing Permissions'),
+    http_error(404, 10003, message='Unknown Channel'),
+    RuntimeError('kaputt'),
+])
+def test_non_transient_errors(error):
+    assert not channel_moves.is_transient_error(error)
 
 # endregion
 
@@ -210,9 +238,14 @@ def test_transient_error_is_retried_once(world):
     assert world.guild.edit_calls == [(channel.id, ARCHIVE_A)] * 2
 
 
-def test_connection_reset_is_retried_once(world):
+@pytest.mark.parametrize('error', [
+    ConnectionResetError(104, 'Connection reset by peer'),
+    aiohttp.ServerDisconnectedError(),
+    asyncio.TimeoutError(),
+])
+def test_network_error_is_retried_once(world, error):
     channel = students(world, 1)[0]
-    world.guild.fail_edits = [ConnectionResetError(104, 'Connection reset by peer')]
+    world.guild.fail_edits = [error]
 
     assert asyncio.run(archive_all(world.guild, [channel])) == [ARCHIVE_A]
     assert len(world.guild.edit_calls) == 2
