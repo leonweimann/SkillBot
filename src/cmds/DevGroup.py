@@ -4,7 +4,9 @@ from discord import app_commands
 from cmds.subgroups.ManualTaskLaunchSubGroup import ManualTaskLaunchSubGroup
 
 import Utils.environment as env
+from Coordination.orphans import run_orphan_cleanup
 from Utils.database import DevMode
+from Utils.errors import CodeError
 from Utils.notifications import NotificationManager
 
 
@@ -270,6 +272,34 @@ class DevGroup(app_commands.Group):
     async def test_alert_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         await env.handle_app_command_error(
             interaction, error, command_name="dev test-alert", reqired_role="Dev"
+        )
+
+    @app_commands.command(
+        name="orphans",
+        description="Verwaiste Schüler-Einträge (Channel fehlt) anzeigen oder löschen"
+    )
+    @app_commands.describe(
+        apply="True: Einträge ausgetretener Schüler wirklich löschen (Standard: nur anzeigen)"
+    )
+    @app_commands.checks.has_role('Dev')
+    async def orphans(self, interaction: discord.Interaction, apply: bool = False):
+        """
+        List teacher-student connections whose channel no longer exists and optionally purge them.
+
+        Only students who left the server are deleted (with ``apply``). Students who are still members are
+        only listed, with a hint how to fix them.
+        """
+        if not interaction.guild:
+            raise CodeError("Dieser Befehl kann nur in einem Server verwendet werden")
+
+        await interaction.response.defer(ephemeral=True, thinking=True)  # fetch_channels/fetch_member can take a while
+        message = await run_orphan_cleanup(interaction.guild, apply=apply, actor=interaction.user)
+        await interaction.followup.send(message, ephemeral=True)
+
+    @orphans.error
+    async def orphans_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        await env.handle_app_command_error(
+            interaction, error, command_name="dev orphans", reqired_role="Dev"
         )
 
 
