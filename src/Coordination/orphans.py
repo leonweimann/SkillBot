@@ -20,7 +20,7 @@ import discord
 
 import Utils.environment  # noqa: F401  (must be imported before Utils.lwlogging, circular import)
 from Utils.channel_moves import get_guild_lock, retry_transient
-from Utils.database import DatabaseError, DatabaseManager, TeacherHasStudentsError, TeacherStudentConnection, User
+from Utils.database import DatabaseError, DatabaseManager, Subuser, TeacherHasStudentsError, TeacherStudentConnection, User
 from Utils.errors import CodeError
 from Utils.lwlogging import log
 
@@ -120,6 +120,22 @@ async def is_guild_member(guild: discord.Guild, user_id: int) -> bool:
         return False
 
 
+async def is_student_present(guild: discord.Guild, student_id: int) -> bool:
+    """
+    Checks whether a student is still on the server with any account: the main account or a connected
+    second account (``subusers``). Only a student without any remaining account counts as departed.
+
+    Raises:
+        discord.HTTPException: If Discord could not answer for one of the accounts.
+    """
+    if await is_guild_member(guild, student_id):
+        return True
+    for subuser in Subuser.get_all_subusers(guild.id, student_id):
+        if await is_guild_member(guild, subuser.subuser_id):
+            return True
+    return False
+
+
 async def detect_orphans(guild: discord.Guild) -> OrphanReport:
     """
     Detects orphaned connections using Discord's current channels and members (not the cache only).
@@ -140,7 +156,7 @@ async def detect_orphans(guild: discord.Guild) -> OrphanReport:
 
     connections = TeacherStudentConnection.get_all(guild.id)
     affected = list(dict.fromkeys(c.student_id for c in connections if c.channel_id not in existing_channel_ids))
-    member_ids = {student_id for student_id in affected if await is_guild_member(guild, student_id)}
+    member_ids = {student_id for student_id in affected if await is_student_present(guild, student_id)}
     names = {student_id: User(guild.id, student_id).real_name for student_id in affected}
     return build_report(connections, existing_channel_ids, member_ids, names)
 

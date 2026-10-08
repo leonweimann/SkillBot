@@ -184,7 +184,8 @@ Zusammenfassung als „Channel nicht gefunden“).
   von Discord und zeigt, was gelöscht würde. Es wird nichts verändert.
 - `/dev orphans apply:True` löscht die Einträge der Schüler, die den Server verlassen haben, und schreibt einen
   Eintrag in den `logs`-Channel.
-- Schüler, die noch auf dem Server sind, werden nie gelöscht, nur aufgelistet. Der Lehrer trägt sie mit
+- Schüler, die noch auf dem Server sind (auch nur mit einem verbundenen Zweit-Account), werden nie gelöscht,
+  nur aufgelistet. Der Lehrer trägt sie mit
   `/students unassign` aus (geht auch ohne Channel) und ordnet sie mit `/students assign` neu zu.
 
 ## Hinweise

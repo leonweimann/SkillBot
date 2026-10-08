@@ -9,7 +9,7 @@ import pytest
 from Coordination import orphans
 from Coordination.orphans import MESSAGE_LIMIT, Orphan, OrphanReport, build_report, format_report, run_orphan_cleanup
 from Utils.channel_moves import get_guild_lock
-from Utils.database import DatabaseError, DatabaseManager, Student, Teacher, TeacherStudentConnection, User
+from Utils.database import Subuser, DatabaseError, DatabaseManager, Student, Teacher, TeacherStudentConnection, User
 from Utils.errors import CodeError
 
 GUILD = 1
@@ -296,3 +296,18 @@ def test_dev_orphans_requires_dev_role():
     assert asyncio.run(command._check_can_run(no_dev_interaction(roles=('Dev',)))) is True
 
 # endregion
+
+
+def test_student_with_remaining_second_account_is_not_deleted(logs):
+    """The main account left, but a connected second account is still on the server: keep everything."""
+    seed()
+    second_account = 77
+    Subuser(GUILD, GONE, second_account).save()
+    guild = FakeGuild(members=(STAYING, FINE, TEACHER, second_account))
+
+    message = run(guild, apply=True)
+
+    assert connected(GONE)  # Not purged
+    assert not connected(NAMELESS)
+    assert 'Gelöscht (1)' in message
+    assert 'Nicht gelöscht – Schüler noch auf dem Server (2)' in message and 'Max Muster' in message
