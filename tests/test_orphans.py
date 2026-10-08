@@ -9,7 +9,7 @@ import pytest
 from Coordination import orphans
 from Coordination.orphans import MESSAGE_LIMIT, Orphan, OrphanReport, build_report, format_report, run_orphan_cleanup
 from Utils.channel_moves import get_guild_lock
-from Utils.database import DatabaseManager, Student, Teacher, TeacherStudentConnection, User
+from Utils.database import DatabaseError, DatabaseManager, Student, Teacher, TeacherStudentConnection, User
 from Utils.errors import CodeError
 
 GUILD = 1
@@ -199,6 +199,27 @@ def test_departed_teacher_with_students_is_not_deleted(logs):
 
     assert connected(GONE)  # GONE is also a teacher with a student
     assert 'Fehlgeschlagen (1)' in message and 'ist Lehrer mit 1 Schüler(n)' in message
+
+
+def test_database_error_for_one_student_does_not_stop_the_others(logs, monkeypatch):
+    seed()
+    real_purge = DatabaseManager.purge_user
+
+    def flaky_purge(guild_id, user_id):
+        if user_id == GONE:
+            raise DatabaseError('Failed to purge user: database is locked')
+        return real_purge(guild_id, user_id)
+
+    monkeypatch.setattr(DatabaseManager, 'purge_user', staticmethod(flaky_purge))
+    message = run(FakeGuild(), apply=True)
+
+    assert connected(GONE)  # Its purge failed and was rolled back
+    assert not connected(NAMELESS)  # The other departed student is still purged
+    assert connected(STAYING) and connected(FINE)
+    assert 'Gelöscht (1)' in message
+    assert 'Fehlgeschlagen (1)' in message and 'database is locked' in message
+    [(log_message, _)] = logs
+    assert 'bereinigt' in log_message
 
 
 def test_unclear_membership_aborts_without_deleting(logs):
