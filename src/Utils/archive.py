@@ -288,9 +288,15 @@ def is_category_full_error(error: BaseException) -> bool:
     text = (getattr(error, 'text', '') or '').lower()
     if 'maximum number of channels in category' in text:
         return True
+    # Only a parent_id error that explicitly says "full" counts: other parent_id errors (e.g. an unknown
+    # category) must not make the allocator create new archives.
     nested = getattr(error, '_errors', None)
-    on_parent = (isinstance(nested, dict) and 'parent_id' in nested) or 'parent_id' in text
-    return getattr(error, 'code', 0) == 50035 and on_parent
+    parent_errors = nested.get('parent_id', {}).get('_errors', []) if isinstance(nested, dict) else []
+    return getattr(error, 'code', 0) == 50035 and any(
+        isinstance(e, dict) and (e.get('code') == 'CHANNEL_PARENT_MAX_CHANNELS'
+                                 or 'maximum number of channels' in str(e.get('message', '')).lower())
+        for e in parent_errors
+    )
 
 
 class ArchiveAllocator:
@@ -311,7 +317,7 @@ class ArchiveAllocator:
     """
 
     MAX_FULL_RETRIES = 5     # Archives a single channel may be rejected by before giving up
-    MAX_NEW_ARCHIVES = 3     # New archives a single pick may create (a reused one may already be full)
+    MAX_NEW_ARCHIVES = 3     # New archives one allocator (one run) may create in total
 
     def __init__(self, guild: discord.Guild, archives: list[discord.CategoryChannel], counts: Counter,
                  parents: dict[int, Optional[int]]):
@@ -328,6 +334,7 @@ class ArchiveAllocator:
         self._archives = archives
         self._counts = counts
         self._parents = parents
+        self._created = 0  # New archives created by this allocator
 
     @classmethod
     async def create(cls, guild: discord.Guild) -> 'ArchiveAllocator':
@@ -388,7 +395,8 @@ class ArchiveAllocator:
             if self._counts[archive.id] < ArchiveCategory._MAX_CAPACITY:
                 return archive
 
-        for _ in range(self.MAX_NEW_ARCHIVES):
+        while self._created < self.MAX_NEW_ARCHIVES:
+            self._created += 1
             # Keep the returned object: the cache only knows the category once its gateway event arrived
             category = await ArchiveCategory._create_new_archive_category(self.guild)
             if not self._is_archive(category.id):
@@ -423,7 +431,12 @@ class ArchiveAllocator:
 
         last_error: Optional[discord.HTTPException] = None
         for _ in range(self.MAX_FULL_RETRIES + 1):
-            category = await self.pick()
+            try:
+                category = await self.pick()
+            except CodeError:
+                if last_error is not None:  # Report Discord's rejection, not the exhausted fallback
+                    raise last_error
+                raise
             try:
                 await retry_transient(lambda target=category: channel.edit(category=target, reason=reason))
             except discord.HTTPException as e:
