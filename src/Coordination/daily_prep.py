@@ -6,10 +6,9 @@ category and archives all other channels of that teacher. `stash_all` archives e
 in a teacher's category (nightly run for teachers without a calendar). `pop_to_teacher` moves a single
 archived channel back into its teacher's category (used by the auto-pop).
 
-All channel moves of a guild are serialised by `get_guild_lock`.
+All channel moves of a guild are serialised by `get_guild_lock` (lives in `Utils.channel_moves`, re-exported here).
 """
 
-import asyncio
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -23,6 +22,7 @@ from Coordination.schedule import CalendarEvent, DayPlan, compute_moves, plan_da
 from Coordination.sorting import channel_sorting_coordinator
 from Utils import msgraph
 from Utils.archive import ArchiveCategory
+from Utils.channel_moves import get_guild_lock
 from Utils.database import Archive, Student, Subuser, Teacher, TeacherCalendar, TeacherStudentConnection
 from Utils.errors import CodeError, UsageError
 from Utils.lwlogging import log
@@ -36,25 +36,6 @@ _ITEM_CHAR_LIMIT = 80          # Max characters per single listed item
 
 
 # region Locks & Helpers
-
-_guild_locks: dict[int, asyncio.Lock] = {}
-
-
-def get_guild_lock(guild_id: int) -> asyncio.Lock:
-    """
-    Returns the lock that serialises all channel moves within a guild.
-
-    Args:
-        guild_id (int): The ID of the guild.
-
-    Returns:
-        asyncio.Lock: The same lock instance for every call with the same guild ID.
-    """
-    lock = _guild_locks.get(guild_id)
-    if lock is None:
-        lock = _guild_locks[guild_id] = asyncio.Lock()
-    return lock
-
 
 def is_archived_category(guild: discord.Guild, category_id: Optional[int]) -> bool:
     """
