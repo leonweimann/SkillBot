@@ -10,7 +10,7 @@ from Utils import archive as archive_mod
 from Utils import channel_moves
 from Utils import environment
 from Utils.channel_moves import get_guild_lock
-from tests.archive_fakes import FakeArchiveTable, FakeGuild
+from tests.archive_fakes import FakeArchiveTable, FakeGuild, server_error
 
 
 TEACHER_ID = 1
@@ -98,8 +98,22 @@ def test_manual_pop_holds_the_guild_lock(world, monkeypatch):
     assert world.guild.server_parent[channel.id] == TEACHER_CATEGORY_ID
 
 
+def test_manual_pop_retries_transient_error_once(world, monkeypatch):
+    monkeypatch.setattr(environment, 'is_member_archived', lambda m: True)
+    member, channel = world.add_student(21, ARCHIVE_A)
+    world.guild.fail_edits = [server_error()]
+
+    asyncio.run(student_coord.pop_student(world.interaction, member))
+
+    assert world.guild.edit_calls == [(channel.id, TEACHER_CATEGORY_ID)] * 2
+    assert world.guild.server_parent[channel.id] == TEACHER_CATEGORY_ID
+
+
 def test_deprecated_get_archive_channel_skips_full_archive(world):
-    world.guild.fill(ARCHIVE_A, 50, start=2000)
+    # Archive A is full on Discord, but the gateway events of those moves have not reached the cache yet
+    for channel in world.guild.fill(ARCHIVE_A, 50, start=2000):
+        channel.category_id = TEACHER_CATEGORY_ID
+    assert len(world.guild.categories[1].channels) == 0
 
     with pytest.warns(DeprecationWarning):
         category = asyncio.run(environment.get_archive_channel(world.guild))
