@@ -1,7 +1,9 @@
-from typing import Iterator
+from collections import Counter
+from typing import Iterator, Optional
 
 import discord
 
+from Utils.channel_moves import retry_transient
 from Utils.database import Archive
 from Utils.errors import CodeError
 
@@ -261,3 +263,178 @@ class ArchiveCategory:
             list[discord.TextChannel]: A list of text channels in the archive category.
         """
         return self.category.text_channels
+
+
+def is_category_full_error(error: BaseException) -> bool:
+    """
+    Checks whether a failed channel move was rejected because the target category is full.
+
+    Discord answers such a move with ``400 Bad Request`` and JSON error code 50035 (Invalid Form Body),
+    the nested error sits on the ``parent_id`` field ("Maximum number of channels in category reached
+    (50)"). discord.py keeps the nested errors in ``_errors`` and flattens them into ``text``.
+
+    Args:
+        error (BaseException): The error raised by ``channel.edit(category=...)``.
+
+    Returns:
+        bool: True if the error says that the target category has no free slot.
+    """
+    if not isinstance(error, discord.HTTPException) or error.status != 400:
+        return False
+    text = (getattr(error, 'text', '') or '').lower()
+    if 'maximum number of channels in category' in text:
+        return True
+    nested = getattr(error, '_errors', None)
+    on_parent = (isinstance(nested, dict) and 'parent_id' in nested) or 'parent_id' in text
+    return getattr(error, 'code', 0) == 50035 and on_parent
+
+
+class ArchiveAllocator:
+    """
+    Distributes channels over the archive categories of a guild without exceeding Discord's limit.
+
+    The guild cache (``category.channels``) is only updated when the gateway event of a move has been
+    processed, which can happen after ``channel.edit`` returned. Picking an archive from the cache during a
+    burst of moves can therefore choose an archive that is already full. The allocator instead fetches the
+    channels once from the API (server truth), counts the channels per registered archive category and
+    keeps that count up to date locally for every move it makes.
+
+    If Discord still rejects a move because the archive is full (someone else filled it after the fetch),
+    the archive is marked full and the channel goes to the next archive or a newly created one.
+
+    Build one allocator per batch of moves and hold the guild lock (``Utils.channel_moves.get_guild_lock``)
+    while using it, so no other move of the bot changes the counts in between.
+    """
+
+    MAX_FULL_RETRIES = 5     # Archives a single channel may be rejected by before giving up
+    MAX_NEW_ARCHIVES = 3     # New archives a single pick may create (a reused one may already be full)
+
+    def __init__(self, guild: discord.Guild, archives: list[discord.CategoryChannel], counts: Counter,
+                 parents: dict[int, Optional[int]]):
+        """
+        Initializes the allocator. Use `ArchiveAllocator.create` to build it from the API.
+
+        Args:
+            guild (discord.Guild): The guild whose archives are used.
+            archives (list[discord.CategoryChannel]): The existing archive categories in database order.
+            counts (Counter): category_id -> number of channels in that category.
+            parents (dict[int, Optional[int]]): channel_id -> category_id of every channel.
+        """
+        self.guild = guild
+        self._archives = archives
+        self._counts = counts
+        self._parents = parents
+
+    @classmethod
+    async def create(cls, guild: discord.Guild) -> 'ArchiveAllocator':
+        """
+        Builds an allocator from the guild's channels as currently stored by Discord.
+
+        Every channel with a parent counts towards that category's capacity (Discord's limit of 50 applies
+        to all channel types). Archive rows whose category does not exist anymore are ignored.
+
+        Args:
+            guild (discord.Guild): The guild whose archives are used.
+
+        Returns:
+            ArchiveAllocator: The allocator (one ``fetch_channels`` request).
+        """
+        fetched = await retry_transient(guild.fetch_channels)
+        fetched_by_id = {channel.id: channel for channel in fetched}
+        counts: Counter = Counter()
+        parents: dict[int, Optional[int]] = {}
+        for channel in fetched:
+            parent = getattr(channel, 'category_id', None)
+            parents[channel.id] = parent
+            if parent is not None:
+                counts[parent] += 1
+
+        archives: list[discord.CategoryChannel] = []
+        for db_archive in Archive.get_all(guild.id):
+            fetched_category = fetched_by_id.get(db_archive.id)
+            if fetched_category is None:
+                continue  # Deleted on Discord
+            # Prefer the cached object (complete state), the fetched one is equivalent for moves
+            archives.append(discord.utils.get(guild.categories, id=db_archive.id) or fetched_category)
+        return cls(guild, archives, counts, parents)
+
+    @property
+    def archives(self) -> list[discord.CategoryChannel]:
+        """The known archive categories in database order (including the ones created by this allocator)."""
+        return list(self._archives)
+
+    def count(self, category_id: int) -> int:
+        """Returns the number of channels the allocator assumes in the given category."""
+        return self._counts[category_id]
+
+    def _is_archive(self, category_id: Optional[int]) -> bool:
+        return category_id is not None and any(archive.id == category_id for archive in self._archives)
+
+    async def pick(self) -> discord.CategoryChannel:
+        """
+        Returns the first archive with a free slot, creating a new archive if all are full.
+
+        Returns:
+            discord.CategoryChannel: An archive category with fewer than 50 channels (as far as known).
+
+        Raises:
+            CodeError: If no archive with a free slot could be found or created.
+        """
+        for archive in self._archives:
+            if self._counts[archive.id] < ArchiveCategory._MAX_CAPACITY:
+                return archive
+
+        for _ in range(self.MAX_NEW_ARCHIVES):
+            # Keep the returned object: the cache only knows the category once its gateway event arrived
+            category = await ArchiveCategory._create_new_archive_category(self.guild)
+            if not self._is_archive(category.id):
+                self._archives.append(category)
+            if self._counts[category.id] < ArchiveCategory._MAX_CAPACITY:
+                return category
+
+        raise CodeError("Kein Archiv mit freiem Platz gefunden und kein neues Archiv anlegbar")
+
+    async def archive(self, channel: discord.abc.GuildChannel, *, reason: Optional[str] = None) -> discord.CategoryChannel:
+        """
+        Moves a channel into an archive category with a free slot.
+
+        A transient error (network, 5xx) is retried once. If Discord rejects the move because the archive
+        is full, that archive is marked full and the next one (or a new one) is tried. A channel that already
+        is in an archive is not moved.
+
+        Args:
+            channel (discord.abc.GuildChannel): The channel to archive.
+            reason (Optional[str]): The audit log reason.
+
+        Returns:
+            discord.CategoryChannel: The archive category the channel is in now.
+
+        Raises:
+            discord.HTTPException: If the move failed for another reason, or every tried archive was full.
+            CodeError: If no archive with a free slot could be found or created.
+        """
+        current_parent = self._parents.get(channel.id, getattr(channel, 'category_id', None))
+        if self._is_archive(current_parent):
+            return next(archive for archive in self._archives if archive.id == current_parent)
+
+        last_error: Optional[discord.HTTPException] = None
+        for _ in range(self.MAX_FULL_RETRIES + 1):
+            category = await self.pick()
+            try:
+                await retry_transient(lambda target=category: channel.edit(category=target, reason=reason))
+            except discord.HTTPException as e:
+                if not is_category_full_error(e):
+                    raise
+                print(f'[archive] Archive {category.id} is full on Discord, trying the next one: {e}')
+                self._counts[category.id] = ArchiveCategory._MAX_CAPACITY
+                last_error = e
+                continue
+
+            self._counts[category.id] += 1
+            if current_parent is not None:
+                self._counts[current_parent] = max(0, self._counts[current_parent] - 1)
+            self._parents[channel.id] = category.id
+            return category
+
+        assert last_error is not None
+        raise last_error
