@@ -129,14 +129,15 @@ class ArchiveCategory:
         """
         Creates a new archive category in the specified guild.
 
-        This method generates a unique name for the archive category and checks if it already exists.
-        If it does not exist, it creates a new category in Discord and records it in the database.
+        This method generates a unique name for the archive category and checks if a category with that
+        name already exists. If not, it creates a new category in Discord. Either way the category is
+        recorded in the database.
 
         Args:
             guild (discord.Guild): The Discord guild in which to create the archive category.
 
         Returns:
-            discord.CategoryChannel: The newly created archive category channel.
+            discord.CategoryChannel: The newly created (or reused and now registered) archive category.
 
         Raises:
             CodeError: If an error occurs while creating the archive category.
@@ -148,11 +149,12 @@ class ArchiveCategory:
         new_category = discord.utils.get(guild.categories, name=name)
         # If no existing category is found, create a new one
         if not new_category:
-            # Create in discord
             new_category = await guild.create_category(name=name)
-            # Create in database
-            db_archive = Archive(guild.id, new_category.id)
-            db_archive.edit(name=name)
+
+        # Register in the database. A reused category with the generated name is not registered yet
+        # (generated names never collide with registered ones); without a row it would never be
+        # capacity-checked or treated as an archive.
+        Archive(guild.id, new_category.id).edit(name=name)
 
         return new_category
 
