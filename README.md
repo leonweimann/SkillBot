@@ -125,9 +125,11 @@ Achtung: Ist in Outlook „Allen Besprechungen eine Onlinebesprechung hinzufüge
 Teams-Meeting und wird übersprungen. Dann würden nachts alle Schüler archiviert. Die Zusammenfassung zeigt
 das als `N× online-meeting`.
 
-Bekannte Grenze: Werden in einer Nacht sehr viele Channels in ein fast volles Archiv (50 Channels) verschoben,
-kann einzelnes Verschieben fehlschlagen. Der Channel bleibt dann bis zur nächsten Nacht in der
-Lehrer-Kategorie und wird in der Zusammenfassung als fehlgeschlagen genannt.
+Archive fassen höchstens 50 Channels (Discord-Grenze). Der Bot zählt die freien Plätze vor dem Archivieren
+anhand der aktuellen Daten von Discord (nicht anhand seines Zwischenspeichers). Ist ein Archiv voll, kommt der
+Channel ins nächste Archiv, bei Bedarf legt der Bot ein neues an. Schlägt ein Verschieben trotzdem fehl
+(z. B. Netzwerkfehler auch nach einem zweiten Versuch), bleibt der Channel bis zur nächsten Nacht in der
+Lehrer-Kategorie und wird mit kurzem Grund als fehlgeschlagen genannt.
 
 ### Microsoft-Entra-App registrieren
 
