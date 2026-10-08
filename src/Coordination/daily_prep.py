@@ -379,7 +379,8 @@ async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection,
     """
     Moves an archived student channel back into its teacher's category.
 
-    The channel is re-fetched from the API to get its authoritative category.
+    The channel is re-fetched from the API to get its authoritative category. The move is retried once
+    on a transient network or server error.
 
     Args:
         guild (discord.Guild): The guild of the channel.
@@ -406,7 +407,7 @@ async def pop_to_teacher(guild: discord.Guild, ts_con: TeacherStudentConnection,
         if teacher_category is None:
             raise CodeError(f"Lehrer {ts_con.teacher_id} hat keine Kategorie")
 
-        await channel.edit(category=teacher_category, reason=reason)
+        await retry_transient(lambda: channel.edit(category=teacher_category, reason=reason))
         await _safe_sort(guild, teacher_category)
     return True
 
