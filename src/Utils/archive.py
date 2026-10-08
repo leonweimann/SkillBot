@@ -17,6 +17,10 @@ class ArchiveCategory:
     with both the Discord API and a database layer (via the Archive class) to maintain consistency
     between the server and persistent storage.
 
+    Note:
+        `make` and `can_add` decide from the guild cache, which lags behind channel moves. Use
+        `ArchiveAllocator` to move channels into archives; it counts the slots from Discord's data.
+
     Attributes:
         guild (discord.Guild): The Discord guild (server) associated with this instance.
         category (discord.CategoryChannel): The Discord category channel managed by this instance.
