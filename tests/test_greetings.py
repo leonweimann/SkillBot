@@ -84,6 +84,23 @@ def test_leaving_student_is_fully_removed(logs):
     assert details['Channels'] == f'{CHANNEL} deleted'
 
 
+def test_leaving_student_with_two_teachers_loses_both_channels(logs):
+    seed_student()
+    other_teacher, other_channel = TEACHER + 1, CHANNEL + 1
+    Teacher(guild_id=GUILD, id=other_teacher).save()
+    TeacherStudentConnection(guild_id=GUILD, teacher_id=other_teacher, student_id=STUDENT,
+                             channel_id=other_channel).save()
+    channels = [FakeChannel(CHANNEL), FakeChannel(other_channel)]
+
+    remove(make_member(STUDENT, channels))
+
+    assert all(channel.deleted for channel in channels)  # No channel is left behind without a row
+    assert TeacherStudentConnection.find_all_by_student(GUILD, STUDENT) == []
+    [(_, details)] = logs
+    assert f'{CHANNEL} deleted' in details['Channels'] and f'{other_channel} deleted' in details['Channels']
+    assert 'teacher_student=2' in details['Deleted rows']
+
+
 def test_missing_channel_still_purges(logs):
     seed_student()
     remove(make_member(STUDENT))  # Channel already gone
