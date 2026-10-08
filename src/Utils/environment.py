@@ -3,7 +3,7 @@ import warnings
 
 import discord
 
-from Utils.archive import ArchiveCategory
+from Utils.archive import ArchiveAllocator, ArchiveCategory
 from Utils.database import *
 from Utils.errors import *
 from Utils.lwlogging import log
@@ -209,18 +209,21 @@ def is_assigned(member: discord.Member) -> bool:
 
 # region Channels
 
-@deprecated("Use ArchiveCategory.make instead")
+@deprecated("Use ArchiveAllocator instead")
 async def get_archive_channel(guild: discord.Guild) -> discord.CategoryChannel:
     """
-    Retrieves the 'Archiv' category from the given Discord guild.
+    Retrieves an archive category with a free slot from the given Discord guild.
+
+    The free slots are counted from Discord's data, not from the (possibly lagging) cache. A new archive
+    is created if all archives are full.
 
     Args:
         guild (discord.Guild): The Discord guild from which to retrieve the category.
 
     Returns:
-        discord.CategoryChannel: The category object corresponding to 'Archiv' in the guild.
+        discord.CategoryChannel: An archive category with fewer than 50 channels.
     """
-    return (await ArchiveCategory.make(guild)).category
+    return await (await ArchiveAllocator.create(guild)).pick()
 
 
 def get_log_channel(guild: discord.Guild) -> discord.TextChannel:

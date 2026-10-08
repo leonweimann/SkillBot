@@ -3,7 +3,8 @@ import discord
 import Utils.environment as env
 from Coordination.sorting import channel_sorting_coordinator
 
-from Utils.archive import ArchiveCategory
+from Utils.archive import ArchiveAllocator
+from Utils.channel_moves import get_guild_lock, retry_transient
 from Utils.database import *
 from Utils.errors import *
 from Utils.lwlogging import log
@@ -148,7 +149,10 @@ async def unassign_student(interaction: discord.Interaction, student: discord.Me
 
 async def stash_student(interaction: discord.Interaction, student: discord.Member):
     """
-    Archives a student's channel by moving it to the archive category.
+    Archives a student's channel by moving it to an archive category with a free slot.
+
+    The free slots are counted from Discord's data (`ArchiveAllocator`, one fetch per call) under the
+    guild lock, so the command never overfills an archive, not even while the nightly run is moving.
 
     Args:
         interaction (discord.Interaction): The interaction that triggered the command.
@@ -180,8 +184,9 @@ async def stash_student(interaction: discord.Interaction, student: discord.Membe
     if env.is_member_archived(student):
         raise UsageError(f"{student.mention} ist bereits archiviert")
 
-    archive = await ArchiveCategory.make(interaction.guild)
-    await archive.add_channel(student_channel)
+    async with get_guild_lock(interaction.guild.id):
+        allocator = await ArchiveAllocator.create(interaction.guild)
+        await allocator.archive(student_channel, reason='Manuell archiviert (/students stash)')
 
 
 async def pop_student(interaction: discord.Interaction, student: discord.Member):
@@ -190,7 +195,7 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
 
     This function performs several checks to ensure the student is valid and belongs to the teacher
     invoking the command. It also verifies that the student's channel is archived before moving it
-    to the teacher's category.
+    to the teacher's category (under the guild lock, like every other channel move).
 
     Args:
         interaction (discord.Interaction): The interaction object representing the command invocation.
@@ -230,7 +235,8 @@ async def pop_student(interaction: discord.Interaction, student: discord.Member)
     if not teacher_category:
         raise CodeError(f"Lehrer {interaction.user.mention} hat keine Kategorie")
 
-    await student_channel.edit(category=teacher_category)
+    async with get_guild_lock(interaction.guild.id):
+        await retry_transient(lambda: student_channel.edit(category=teacher_category))
 
 # endregion
 
